@@ -1,0 +1,22 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configurar Intelbras AMT 2018 / 4010",
+        "description": "Configure a porta do servidor e a senha da central.\n\nA central AMT irá conectar neste servidor na porta configurada.",
+        "data": {
+          "port": "Porta TCP",
+          "password": "Senha da central (4-6 dígitos)"
+        },
+        "data_description": {
+          "port": "Porta onde o servidor irá escutar (padrão: 9009)",
+          "password": "Senha configurada na central para comandos remotos"
+        }
+      }
+    },
+    "error": {
+      "invalid_port": "Porta inválida (1-65535)",
+      "invalid_password": "Senha deve ter entre 4 e 6 dígitos"
+    }
+  }
+}

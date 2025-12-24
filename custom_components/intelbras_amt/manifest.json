@@ -1,0 +1,16 @@
+{
+  "domain": "intelbras_amt",
+  "name": "Intelbras AMT 2018 / 4010",
+  "codeowners": ["@pehesi97"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/pehesi97/intelbras-amt-homeassistant",
+  "integration_type": "hub",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/pehesi97/intelbras-amt-homeassistant/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}
+
+
+
