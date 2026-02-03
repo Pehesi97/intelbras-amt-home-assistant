@@ -298,7 +298,7 @@ class AMTPGMSwitch(CoordinatorEntity[AMTCoordinator], SwitchEntity):
             return
         
         try:
-            pgm_output = PGMOutput(self.pgm_number)
+            pgm_output = PGMOutput.from_number(self.pgm_number)
             cmd = PGMCommand.turn_on(self._password, pgm_output)
             response = await self._server.send_command(
                 connection_id,
@@ -322,7 +322,7 @@ class AMTPGMSwitch(CoordinatorEntity[AMTCoordinator], SwitchEntity):
             return
         
         try:
-            pgm_output = PGMOutput(self.pgm_number)
+            pgm_output = PGMOutput.from_number(self.pgm_number)
             cmd = PGMCommand.turn_off(self._password, pgm_output)
             response = await self._server.send_command(
                 connection_id,
