@@ -14,7 +14,7 @@ from .const import DOMAIN
 # Importa da biblioteca local
 from .lib.server import AMTServer
 from .lib.protocol.commands import PGMCommand, ActivationCommand, DeactivationCommand, SirenCommand
-from .lib.const import PartitionCode, PGMOutput
+from .lib.const import PartitionCode
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -298,8 +298,7 @@ class AMTPGMSwitch(CoordinatorEntity[AMTCoordinator], SwitchEntity):
             return
         
         try:
-            pgm_output = PGMOutput(self.pgm_number)
-            cmd = PGMCommand.turn_on(self._password, pgm_output)
+            cmd = PGMCommand.turn_on(self._password, self.pgm_number)
             response = await self._server.send_command(
                 connection_id,
                 cmd.build_net_frame(),
@@ -322,8 +321,7 @@ class AMTPGMSwitch(CoordinatorEntity[AMTCoordinator], SwitchEntity):
             return
         
         try:
-            pgm_output = PGMOutput(self.pgm_number)
-            cmd = PGMCommand.turn_off(self._password, pgm_output)
+            cmd = PGMCommand.turn_off(self._password, self.pgm_number)
             response = await self._server.send_command(
                 connection_id,
                 cmd.build_net_frame(),
