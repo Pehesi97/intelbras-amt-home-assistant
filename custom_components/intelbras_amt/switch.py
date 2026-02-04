@@ -292,49 +292,65 @@ class AMTPGMSwitch(CoordinatorEntity[AMTCoordinator], SwitchEntity):
     
     async def async_turn_on(self) -> None:
         """Liga a PGM."""
-        connection_id = self.hass.data[DOMAIN][self._entry.entry_id].get("connection_id")
-        if not connection_id:
-            _LOGGER.error("Central não conectada, não é possível ligar PGM")
+        _LOGGER.info("PGM %s: turn_on acionado", self.pgm_number)
+        # Mesmo padrão do alarm_control_panel (que funciona)
+        entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        server: AMTServer = entry_data.get("server")
+        connection_id = entry_data.get("connection_id")
+        password = entry_data.get("password", "")
+        
+        if not server or not connection_id:
+            _LOGGER.error("Central não conectada, não é possível ligar PGM %s", self.pgm_number)
             return
         
         try:
-            cmd = PGMCommand.turn_on(self._password, self.pgm_number)
-            response = await self._server.send_command(
+            cmd = PGMCommand.turn_on(password, self.pgm_number)
+            response = await server.send_command(
                 connection_id,
                 cmd.build_net_frame(),
                 wait_response=True,
             )
             
             if response.is_success:
-                _LOGGER.info(f"PGM {self.pgm_number} ligada com sucesso")
+                _LOGGER.info("PGM %s ligada com sucesso", self.pgm_number)
                 await self.coordinator.async_request_refresh()
             else:
-                _LOGGER.error(f"Erro ao ligar PGM {self.pgm_number}: {response.message}")
+                _LOGGER.error("Erro ao ligar PGM %s: %s", self.pgm_number, response.message)
+        except TimeoutError:
+            _LOGGER.error("Timeout ao ligar PGM %s", self.pgm_number)
         except Exception as e:
-            _LOGGER.error(f"Erro ao ligar PGM {self.pgm_number}: {e}")
+            _LOGGER.error("Erro ao ligar PGM %s: %s", self.pgm_number, e)
     
     async def async_turn_off(self) -> None:
         """Desliga a PGM."""
-        connection_id = self.hass.data[DOMAIN][self._entry.entry_id].get("connection_id")
-        if not connection_id:
-            _LOGGER.error("Central não conectada, não é possível desligar PGM")
+        _LOGGER.info("PGM %s: turn_off acionado", self.pgm_number)
+        # Mesmo padrão do alarm_control_panel (que funciona)
+        entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        server: AMTServer = entry_data.get("server")
+        connection_id = entry_data.get("connection_id")
+        password = entry_data.get("password", "")
+        
+        if not server or not connection_id:
+            _LOGGER.error("Central não conectada, não é possível desligar PGM %s", self.pgm_number)
             return
         
         try:
-            cmd = PGMCommand.turn_off(self._password, self.pgm_number)
-            response = await self._server.send_command(
+            cmd = PGMCommand.turn_off(password, self.pgm_number)
+            response = await server.send_command(
                 connection_id,
                 cmd.build_net_frame(),
                 wait_response=True,
             )
             
             if response.is_success:
-                _LOGGER.info(f"PGM {self.pgm_number} desligada com sucesso")
+                _LOGGER.info("PGM %s desligada com sucesso", self.pgm_number)
                 await self.coordinator.async_request_refresh()
             else:
-                _LOGGER.error(f"Erro ao desligar PGM {self.pgm_number}: {response.message}")
+                _LOGGER.error("Erro ao desligar PGM %s: %s", self.pgm_number, response.message)
+        except TimeoutError:
+            _LOGGER.error("Timeout ao desligar PGM %s", self.pgm_number)
         except Exception as e:
-            _LOGGER.error(f"Erro ao desligar PGM {self.pgm_number}: {e}")
+            _LOGGER.error("Erro ao desligar PGM %s: %s", self.pgm_number, e)
 
 
 class AMTPartitionSwitch(CoordinatorEntity[AMTCoordinator], SwitchEntity):
