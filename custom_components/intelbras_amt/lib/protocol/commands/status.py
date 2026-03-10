@@ -469,7 +469,7 @@ class PartialCentralStatus:
     
     # Informações gerais
     model: int = 0
-    """Modelo da central (0x1E = AMT 2018 E/EG, 0x41 = AMT 4010)."""
+    """Modelo da central (0x1E = AMT 2018 E/EG, 0x34 = AMT 2018 E SMART, 0x41 = AMT 4010)."""
     
     firmware_version: str = ""
     """Versão do firmware (ex: "3.1")."""

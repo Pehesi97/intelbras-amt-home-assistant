@@ -4,7 +4,7 @@ Integração para Home Assistant que permite controlar centrais de alarme Intelb
 
 ## Modelos Suportados
 
-- ✅ **AMT 2018 E/EG** - Detecção automática (comando 0x5A)
+- ✅ **AMT 2018 E/EG/E SMART** - Detecção automática (comando 0x5A)
 - ✅ **AMT 4010** - Detecção automática (comando 0x5B)
 
 A integração **detecta automaticamente** o modelo da central e usa o comando apropriado!
@@ -24,7 +24,7 @@ A integração **detecta automaticamente** o modelo da central e usa o comando a
 ## Requisitos
 
 - **Home Assistant**: 2023.1.0 ou superior
-- **Central Intelbras**: AMT 2018 E/EG ou AMT 4010 com firmware compatível
+- **Central Intelbras**: AMT 2018 E/EG/E SMART ou AMT 4010 com firmware compatível
 - **Conexão de rede** entre a central e o Home Assistant
 - **Senha da central** (4-6 dígitos configurada na central)
 

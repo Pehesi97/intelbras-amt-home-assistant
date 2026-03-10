@@ -251,26 +251,29 @@ def get_response_message(response_code: int) -> str:
 
 class CentralModel(IntEnum):
     """Modelos de centrais de alarme Intelbras."""
-    
+
     AMT_2018_E = 0x1E
     """AMT 2018 E/EG - Central de alarme monitorada."""
-    
+
+    AMT_2018_E_SMART = 0x34
+    """AMT 2018 E SMART - Central de alarme monitorada."""
+
     AMT_4010 = 0x41
     """AMT 4010 - Central de alarme monitorada."""
-    
+
     @classmethod
     def get_name(cls, model_code: int) -> str:
         """Retorna o nome do modelo.
-        
+
         Args:
             model_code: Código do modelo (hex).
-            
+
         Returns:
             Nome do modelo ou código hex se desconhecido.
         """
         model_names = {
             cls.AMT_2018_E: "AMT 2018 E/EG",
+            cls.AMT_2018_E_SMART: "AMT 2018 E SMART",
             cls.AMT_4010: "AMT 4010",
         }
         return model_names.get(model_code, f"0x{model_code:02X}")
-

@@ -28,6 +28,7 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
     
     Detecta automaticamente o modelo da central e usa o comando apropriado:
     - AMT 2018 E/EG (0x1E): Comando 0x5A (status parcial, 43 bytes)
+    - AMT 2018 E SMART (0x34): Comando 0x5A (status parcial, 43 bytes)
     - AMT 4010 (0x41): Comando 0x5B (status completo, 54 bytes)
     """
 
@@ -59,7 +60,7 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
         self.password = password
         self.entry_id = entry_id
         self._detected_model: int | None = None
-        """Modelo detectado da central (0x1E = AMT 2018, 0x41 = AMT 4010)."""
+        """Modelo detectado da central (0x1E = AMT 2018 E/EG, 0x34 = AMT 2018 E SMART, 0x41 = AMT 4010)."""
 
     async def _async_update_data(self) -> PartialCentralStatus | CentralStatus | None:
         """Busca status atual da central.
@@ -77,13 +78,13 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
             return None
         
         try:
-            # Se ainda não detectamos o modelo, tenta 0x5A primeiro (AMT 2018)
+            # Se ainda não detectamos o modelo, tenta 0x5A primeiro (AMT 2018 E/EG/E SMART)
             if self._detected_model is None:
                 _LOGGER.info("Detectando modelo da central automaticamente...")
                 return await self._detect_and_fetch_status()
             
             # Modelo já detectado, usa o comando apropriado
-            if self._detected_model == CentralModel.AMT_2018_E:
+            if self._detected_model in (CentralModel.AMT_2018_E, CentralModel.AMT_2018_E_SMART):
                 return await self._fetch_partial_status()
             elif self._detected_model == CentralModel.AMT_4010:
                 return await self._fetch_full_status()
@@ -102,7 +103,7 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
         Tenta status parcial (0x5A) primeiro. Se receber resposta válida,
         detecta o modelo e decide qual comando usar nas próximas vezes.
         """
-        # Tenta status parcial (0x5A) - AMT 2018 E/EG
+        # Tenta status parcial (0x5A) - AMT 2018 E/EG/E SMART
         try:
             status = await self._fetch_partial_status()
             if status:
@@ -167,6 +168,3 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
             raise UpdateFailed("Não foi possível parsear status completo")
         else:
             raise UpdateFailed(f"Erro ao buscar status completo: {response.message}")
-
-
-
