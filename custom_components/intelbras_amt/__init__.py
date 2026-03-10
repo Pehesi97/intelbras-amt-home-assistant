@@ -32,6 +32,9 @@ if _HAS_HOMEASSISTANT:
 
     _LOGGER = logging.getLogger(__name__)
 
+    # Log level INFO por padrão para a lib (evita inundar logs do HA com DEBUG)
+    logging.getLogger("custom_components.intelbras_amt.lib").setLevel(logging.INFO)
+
     # Importa da biblioteca local
     from .lib.server import AMTServer, AMTServerConfig
     from .lib.protocol.isecnet import ISECNetFrame
