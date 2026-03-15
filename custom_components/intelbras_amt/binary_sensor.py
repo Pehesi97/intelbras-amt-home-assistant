@@ -14,6 +14,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import AMTCoordinator
 from .const import DOMAIN
+from .lib.const import CentralModel
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,37 +26,65 @@ async def async_setup_entry(
 ) -> None:
     """Configura os binary sensors."""
     coordinator: AMTCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-    
-    entities: list[BinarySensorEntity] = []
-    
-    # Cria entidades para todas as zonas (sempre cria todas, mesmo que não estejam ativas)
-    # Zonas abertas, violadas e bypass (1-48)
-    for zone_num in range(1, 49):
-        entities.append(AMTZoneBinarySensor(coordinator, entry, zone_num, "aberta"))
-        entities.append(AMTZoneBinarySensor(coordinator, entry, zone_num, "violada"))
-        entities.append(AMTZoneBinarySensor(coordinator, entry, zone_num, "bypass"))
-    
-    # Zonas com tamper e curto-circuito (1-18)
-    for zone_num in range(1, 19):
-        entities.append(AMTZoneBinarySensor(coordinator, entry, zone_num, "tamper"))
-        entities.append(AMTZoneBinarySensor(coordinator, entry, zone_num, "curto_circuito"))
-    
-    # Bateria baixa em sensores sem fio (1-40)
-    for zone_num in range(1, 41):
-        entities.append(AMTZoneBinarySensor(coordinator, entry, zone_num, "bateria_baixa"))
-    
-    # Cria entidades de problemas do sistema
-    entities.append(AMTProblemBinarySensor(coordinator, entry, "energia", "Falta de Energia"))
-    entities.append(AMTProblemBinarySensor(coordinator, entry, "bateria_baixa", "Bateria Baixa"))
-    entities.append(AMTProblemBinarySensor(coordinator, entry, "bateria_ausente", "Bateria Ausente"))
-    entities.append(AMTProblemBinarySensor(coordinator, entry, "bateria_curto", "Bateria em Curto"))
-    entities.append(AMTProblemBinarySensor(coordinator, entry, "sobrecarga_aux", "Sobrecarga Auxiliar"))
-    entities.append(AMTProblemBinarySensor(coordinator, entry, "sirene_cortada", "Fio Sirene Cortado"))
-    entities.append(AMTProblemBinarySensor(coordinator, entry, "sirene_curto", "Curto Sirene"))
-    entities.append(AMTProblemBinarySensor(coordinator, entry, "telefone_cortado", "Linha Telefônica Cortada"))
-    entities.append(AMTProblemBinarySensor(coordinator, entry, "falha_comunicacao", "Falha Comunicação"))
-    
-    async_add_entities(entities)
+
+    # Sensores de problemas do sistema são independentes do modelo — adiciona imediatamente
+    async_add_entities([
+        AMTProblemBinarySensor(coordinator, entry, "energia", "Falta de Energia"),
+        AMTProblemBinarySensor(coordinator, entry, "bateria_baixa", "Bateria Baixa"),
+        AMTProblemBinarySensor(coordinator, entry, "bateria_ausente", "Bateria Ausente"),
+        AMTProblemBinarySensor(coordinator, entry, "bateria_curto", "Bateria em Curto"),
+        AMTProblemBinarySensor(coordinator, entry, "sobrecarga_aux", "Sobrecarga Auxiliar"),
+        AMTProblemBinarySensor(coordinator, entry, "sirene_cortada", "Fio Sirene Cortado"),
+        AMTProblemBinarySensor(coordinator, entry, "sirene_curto", "Curto Sirene"),
+        AMTProblemBinarySensor(coordinator, entry, "telefone_cortado", "Linha Telefônica Cortada"),
+        AMTProblemBinarySensor(coordinator, entry, "falha_comunicacao", "Falha Comunicação"),
+    ])
+
+    # Entidades de zona dependem do modelo — registra após detecção automática
+    _zones_registered = False
+
+    @callback
+    def _async_add_zone_entities() -> None:
+        nonlocal _zones_registered
+        if _zones_registered or coordinator._detected_model is None:
+            return
+        _zones_registered = True
+
+        if coordinator._detected_model == CentralModel.AMT_4010:
+            max_zones = 64
+            max_low_batt = 64
+        else:
+            # AMT 2018 E/EG/E SMART
+            max_zones = 48
+            max_low_batt = 40
+
+        zone_entities: list[BinarySensorEntity] = []
+
+        for zone_num in range(1, max_zones + 1):
+            zone_entities.append(AMTZoneBinarySensor(coordinator, entry, zone_num, "aberta"))
+            zone_entities.append(AMTZoneBinarySensor(coordinator, entry, zone_num, "violada"))
+            zone_entities.append(AMTZoneBinarySensor(coordinator, entry, zone_num, "bypass"))
+
+        for zone_num in range(1, 19):
+            zone_entities.append(AMTZoneBinarySensor(coordinator, entry, zone_num, "tamper"))
+            zone_entities.append(AMTZoneBinarySensor(coordinator, entry, zone_num, "curto_circuito"))
+
+        for zone_num in range(1, max_low_batt + 1):
+            zone_entities.append(AMTZoneBinarySensor(coordinator, entry, zone_num, "bateria_baixa"))
+
+        _LOGGER.info(
+            "Modelo %s detectado: registrando %d zonas",
+            CentralModel.get_name(coordinator._detected_model),
+            max_zones,
+        )
+        async_add_entities(zone_entities)
+
+    # Tenta adicionar imediatamente caso o modelo já seja conhecido (ex: reinício do HA)
+    _async_add_zone_entities()
+
+    # Caso contrário, aguarda a primeira atualização do coordinator
+    if not _zones_registered:
+        entry.async_on_unload(coordinator.async_add_listener(_async_add_zone_entities))
 
 
 class AMTZoneBinarySensor(CoordinatorEntity[AMTCoordinator], BinarySensorEntity):
@@ -75,7 +104,7 @@ class AMTZoneBinarySensor(CoordinatorEntity[AMTCoordinator], BinarySensorEntity)
         Args:
             coordinator: Coordinator do status.
             entry: Config entry.
-            zone_number: Número da zona (1-48).
+            zone_number: Número da zona (1-64).
             zone_type: Tipo de status ('aberta', 'violada', 'bypass', 'tamper', 'curto_circuito', 'bateria_baixa').
         """
         super().__init__(coordinator)
