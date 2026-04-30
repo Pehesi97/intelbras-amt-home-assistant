@@ -27,7 +27,7 @@ if _HAS_HOMEASSISTANT:
     from datetime import datetime
     from pathlib import Path
 
-    from .const import DOMAIN, CONF_PORT, CONF_PASSWORD, DEFAULT_PORT
+    from .const import DOMAIN, CONF_PORT, CONF_PASSWORD, CONF_UPDATE_INTERVAL, DEFAULT_PORT, DEFAULT_UPDATE_INTERVAL
     from .coordinator import AMTCoordinator
 
     _LOGGER = logging.getLogger(__name__)
@@ -57,6 +57,7 @@ if _HAS_HOMEASSISTANT:
         
         port = entry.data.get(CONF_PORT, DEFAULT_PORT)
         password = entry.data.get(CONF_PASSWORD, "")
+        update_interval = entry.data.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
         
         # Cria configuração do servidor
         config = AMTServerConfig(
@@ -75,6 +76,7 @@ if _HAS_HOMEASSISTANT:
             connection_id=None,  # Será atualizado quando conectar
             password=password,
             entry_id=entry.entry_id,
+            update_interval=update_interval,
         )
         
         # Callbacks para eventos
@@ -118,6 +120,15 @@ if _HAS_HOMEASSISTANT:
                 "command": frame.command,
                 "content": frame.content.hex(),
             })
+        
+        @server.on_heartbeat
+        async def on_heartbeat_received(conn):
+            """Chamado quando um heartbeat é recebido.
+            
+            Dispara refresh imediato do status para reduzir latência.
+            """
+            _LOGGER.debug(f"Heartbeat de {conn.id}, disparando refresh de status")
+            await coordinator.async_heartbeat_refresh()
         
         # Armazena dados no hass.data por entry_id
         hass.data[DOMAIN][entry.entry_id] = {

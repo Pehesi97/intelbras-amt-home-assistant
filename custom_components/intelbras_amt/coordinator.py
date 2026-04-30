@@ -1,6 +1,7 @@
 """Coordinator para atualização periódica do status da central."""
 
 import logging
+import time
 from datetime import timedelta
 
 from homeassistant.core import HomeAssistant
@@ -16,11 +17,13 @@ from .lib.protocol.commands import (
 )
 from .lib.protocol.responses import ResponseType
 from .lib.const import CentralModel
+from .const import DEFAULT_UPDATE_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
-UPDATE_INTERVAL = timedelta(seconds=30)
-"""Intervalo de atualização do status (30 segundos)."""
+# Intervalo mínimo entre refreshes disparados por heartbeat (debounce)
+_MIN_HEARTBEAT_REFRESH_INTERVAL = 2.0
+"""Intervalo mínimo (em segundos) entre refreshes disparados por heartbeat."""
 
 
 class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus | None]):
@@ -30,6 +33,9 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
     - AMT 2018 E/EG (0x1E): Comando 0x5A (status parcial, 43 bytes)
     - AMT 2018 E SMART (0x34): Comando 0x5A (status parcial, 43 bytes)
     - AMT 4010 (0x41): Comando 0x5B (status completo, 54 bytes)
+    
+    Suporta refresh imediato ao receber heartbeat da central,
+    reduzindo a latência de atualização para ~1-2 segundos.
     """
 
     def __init__(
@@ -39,6 +45,7 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
         connection_id: str | None,
         password: str,
         entry_id: str,
+        update_interval: int = DEFAULT_UPDATE_INTERVAL,
     ) -> None:
         """Inicializa o coordinator.
         
@@ -48,12 +55,13 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
             connection_id: ID da conexão ativa.
             password: Senha da central.
             entry_id: ID da config entry.
+            update_interval: Intervalo de polling em segundos (padrão: 5s).
         """
         super().__init__(
             hass,
             _LOGGER,
             name=f"Intelbras AMT ({entry_id})",
-            update_interval=UPDATE_INTERVAL,
+            update_interval=timedelta(seconds=update_interval),
         )
         self.server = server
         self.connection_id = connection_id
@@ -61,6 +69,30 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
         self.entry_id = entry_id
         self._detected_model: int | None = None
         """Modelo detectado da central (0x1E = AMT 2018 E/EG, 0x34 = AMT 2018 E SMART, 0x41 = AMT 4010)."""
+        self._last_heartbeat_refresh: float = 0.0
+        """Timestamp do último refresh disparado por heartbeat (monotonic)."""
+
+    async def async_heartbeat_refresh(self) -> None:
+        """Agenda um refresh de status ao receber heartbeat.
+        
+        Implementa debounce: ignora se o último refresh por heartbeat
+        foi há menos de _MIN_HEARTBEAT_REFRESH_INTERVAL segundos.
+        Isso evita spam de requests se heartbeats chegarem em rajada.
+        """
+        now = time.monotonic()
+        elapsed = now - self._last_heartbeat_refresh
+        
+        if elapsed < _MIN_HEARTBEAT_REFRESH_INTERVAL:
+            _LOGGER.debug(
+                "Heartbeat refresh ignorado (debounce): último há %.1fs, mínimo %.1fs",
+                elapsed,
+                _MIN_HEARTBEAT_REFRESH_INTERVAL,
+            )
+            return
+        
+        self._last_heartbeat_refresh = now
+        _LOGGER.debug("Heartbeat recebido, disparando refresh de status")
+        await self.async_request_refresh()
 
     async def _async_update_data(self) -> PartialCentralStatus | CentralStatus | None:
         """Busca status atual da central.
@@ -168,3 +200,4 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
             raise UpdateFailed("Não foi possível parsear status completo")
         else:
             raise UpdateFailed(f"Erro ao buscar status completo: {response.message}")
+

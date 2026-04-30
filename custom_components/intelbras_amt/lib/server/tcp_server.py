@@ -83,6 +83,7 @@ class AMTServer:
         self._frame_callbacks: list[FrameCallback] = []
         self._connect_callbacks: list[ConnectionCallback] = []
         self._disconnect_callbacks: list[ConnectionCallback] = []
+        self._heartbeat_callbacks: list[ConnectionCallback] = []
         
         # Estado
         self._running = False
@@ -136,6 +137,21 @@ class AMTServer:
             A própria função callback.
         """
         self._disconnect_callbacks.append(callback)
+        return callback
+
+    def on_heartbeat(self, callback: ConnectionCallback) -> ConnectionCallback:
+        """Decorator para registrar callback de heartbeat recebido.
+        
+        Chamado após o ACK do heartbeat ser enviado.
+        Útil para disparar refresh de status.
+        
+        Args:
+            callback: Função async(connection) a ser chamada.
+            
+        Returns:
+            A própria função callback.
+        """
+        self._heartbeat_callbacks.append(callback)
         return callback
 
     async def start(self) -> None:
@@ -382,6 +398,13 @@ class AMTServer:
         
         # Atualiza timestamp do último heartbeat
         connection.metadata["last_heartbeat"] = asyncio.get_event_loop().time()
+        
+        # Notifica callbacks de heartbeat
+        for callback in self._heartbeat_callbacks:
+            try:
+                await callback(connection)
+            except Exception as e:
+                logger.error(f"Erro em callback de heartbeat: {e}")
 
     async def _handle_connection_info(
         self,

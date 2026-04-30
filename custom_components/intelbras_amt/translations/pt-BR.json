@@ -6,17 +6,20 @@
         "description": "Configure a porta do servidor e a senha da central.\n\nA central AMT irá conectar neste servidor na porta configurada.",
         "data": {
           "port": "Porta TCP",
-          "password": "Senha da central (4-6 dígitos)"
+          "password": "Senha da central (4-6 dígitos)",
+          "update_interval": "Intervalo de atualização (segundos)"
         },
         "data_description": {
           "port": "Porta onde o servidor irá escutar (padrão: 9009)",
-          "password": "Senha configurada na central para comandos remotos"
+          "password": "Senha configurada na central para comandos remotos",
+          "update_interval": "Intervalo base de polling do status (1-60 segundos, padrão: 5). O status também é atualizado automaticamente a cada heartbeat da central."
         }
       }
     },
     "error": {
       "invalid_port": "Porta inválida (1-65535)",
-      "invalid_password": "Senha deve ter entre 4 e 6 dígitos"
+      "invalid_password": "Senha deve ter entre 4 e 6 dígitos",
+      "invalid_update_interval": "Intervalo deve ser entre 1 e 60 segundos"
     }
   }
 }

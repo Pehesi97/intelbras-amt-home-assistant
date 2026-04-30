@@ -10,7 +10,14 @@ from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 
-from .const import DOMAIN, CONF_PASSWORD, CONF_PORT, DEFAULT_PORT
+from .const import (
+    DOMAIN,
+    CONF_PASSWORD,
+    CONF_PORT,
+    CONF_UPDATE_INTERVAL,
+    DEFAULT_PORT,
+    DEFAULT_UPDATE_INTERVAL,
+)
 
 
 class IntelbrasAMTConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -28,12 +35,16 @@ class IntelbrasAMTConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Valida os dados
             port = user_input.get(CONF_PORT, DEFAULT_PORT)
             password = user_input.get(CONF_PASSWORD, "")
+            update_interval = user_input.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
             
             if not isinstance(port, int) or not 1 <= port <= 65535:
                 errors["port"] = "invalid_port"
             
             if not isinstance(password, str) or len(password) < 4 or len(password) > 6:
                 errors["password"] = "invalid_password"
+            
+            if not isinstance(update_interval, int) or not 1 <= update_interval <= 60:
+                errors["update_interval"] = "invalid_update_interval"
             
             if not errors:
                 # Verifica se já existe uma entrada com a mesma porta
@@ -46,6 +57,7 @@ class IntelbrasAMTConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     data={
                         CONF_PORT: port,
                         CONF_PASSWORD: password,
+                        CONF_UPDATE_INTERVAL: update_interval,
                     },
                 )
         
@@ -55,12 +67,10 @@ class IntelbrasAMTConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema({
                 vol.Optional(CONF_PORT, default=DEFAULT_PORT): int,
                 vol.Required(CONF_PASSWORD): str,
+                vol.Optional(CONF_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL): int,
             }),
             errors=errors,
             description_placeholders={
                 "default_port": str(DEFAULT_PORT),
             },
         )
-
-
-
