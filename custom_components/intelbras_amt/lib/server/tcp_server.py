@@ -452,6 +452,9 @@ class AMTServer:
     ) -> Response | None:
         """Envia frame e opcionalmente aguarda resposta.
         
+        Usa lock por conexão para garantir que apenas um comando
+        esteja in-flight por vez, evitando race conditions no pending_response.
+        
         Args:
             connection: Conexão para enviar.
             frame: Frame a ser enviado.
@@ -463,42 +466,43 @@ class AMTServer:
         Raises:
             TimeoutError: Se timeout aguardando resposta.
         """
-        data = frame.build()
-        
-        if wait_response:
-            # Prepara para aguardar resposta
-            connection.pending_response = asyncio.get_event_loop().create_future()
-            logger.debug(f"Criado pending_response para {connection.id}, aguardando resposta...")
-        
-        # Envia dados
-        connection.writer.write(data)
-        await connection.writer.drain()
-        
-        logger.debug(f"Enviado para {connection.id}: {data.hex(' ')}")
-        
-        if not wait_response:
-            return None
-        
-        # Aguarda resposta com timeout
-        try:
-            logger.debug(f"Aguardando resposta de {connection.id} (timeout: {self._config.response_timeout}s)...")
-            response_frame = await asyncio.wait_for(
-                connection.pending_response,
-                timeout=self._config.response_timeout,
-            )
-            logger.debug(f"Resposta recebida de {connection.id}: {response_frame}")
-            return Response.from_isecnet_frame(response_frame)
-        except asyncio.TimeoutError:
-            logger.warning(
-                f"Timeout aguardando resposta de {connection.id} "
-                f"({self._config.response_timeout}s). "
-                f"pending_response ainda existe: {connection.pending_response is not None}"
-            )
-            connection.pending_response = None
-            raise TimeoutError(
-                f"Timeout aguardando resposta de {connection.id} "
-                f"({self._config.response_timeout}s)"
-            )
+        async with connection._command_lock:
+            data = frame.build()
+            
+            if wait_response:
+                # Prepara para aguardar resposta
+                connection.pending_response = asyncio.get_event_loop().create_future()
+                logger.debug(f"Criado pending_response para {connection.id}, aguardando resposta...")
+            
+            # Envia dados
+            connection.writer.write(data)
+            await connection.writer.drain()
+            
+            logger.debug(f"Enviado para {connection.id}: {data.hex(' ')}")
+            
+            if not wait_response:
+                return None
+            
+            # Aguarda resposta com timeout
+            try:
+                logger.debug(f"Aguardando resposta de {connection.id} (timeout: {self._config.response_timeout}s)...")
+                response_frame = await asyncio.wait_for(
+                    connection.pending_response,
+                    timeout=self._config.response_timeout,
+                )
+                logger.debug(f"Resposta recebida de {connection.id}: {response_frame}")
+                return Response.from_isecnet_frame(response_frame)
+            except asyncio.TimeoutError:
+                logger.warning(
+                    f"Timeout aguardando resposta de {connection.id} "
+                    f"({self._config.response_timeout}s). "
+                    f"pending_response ainda existe: {connection.pending_response is not None}"
+                )
+                connection.pending_response = None
+                raise TimeoutError(
+                    f"Timeout aguardando resposta de {connection.id} "
+                    f"({self._config.response_timeout}s)"
+                )
 
     async def __aenter__(self) -> "AMTServer":
         """Context manager: inicia servidor."""

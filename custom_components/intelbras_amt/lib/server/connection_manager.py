@@ -35,6 +35,8 @@ class AMTConnection:
     connected_at: datetime = field(default_factory=datetime.now)
     pending_response: asyncio.Future | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    _command_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    """Lock para serializar envio de comandos. Garante que apenas um comando aguarda resposta por vez."""
 
     @property
     def host(self) -> str:
