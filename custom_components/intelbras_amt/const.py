@@ -9,7 +9,7 @@ CONF_UPDATE_INTERVAL = "update_interval"
 
 # Defaults
 DEFAULT_PORT = 9009
-DEFAULT_UPDATE_INTERVAL = 5
+DEFAULT_UPDATE_INTERVAL = 2
 """Intervalo padrão de atualização do status em segundos."""
 
 # Atributos
