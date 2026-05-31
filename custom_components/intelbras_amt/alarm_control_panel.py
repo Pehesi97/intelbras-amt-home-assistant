@@ -83,8 +83,8 @@ class IntelbrasAMTAlarm(CoordinatorEntity[AMTCoordinator], AlarmControlPanelEnti
         
         status = self.coordinator.data
         
-        # Verifica se está disparado
-        if status.triggered:
+        # Zonas podem ficar marcadas como violadas mesmo com a central desarmada.
+        if status.siren_on or (status.armed and status.triggered):
             return AlarmControlPanelState.TRIGGERED
         
         # Verifica se está armada
@@ -195,4 +195,3 @@ class IntelbrasAMTAlarm(CoordinatorEntity[AMTCoordinator], AlarmControlPanelEnti
             _LOGGER.error("Timeout aguardando resposta da central")
         except Exception as e:
             _LOGGER.error(f"Erro ao enviar comando: {e}")
-

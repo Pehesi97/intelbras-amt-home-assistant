@@ -349,7 +349,7 @@ class CentralStatus:
         # === Funcionamento (Status30, byte 29) ===
         func_byte = data[29]
         status.armed = bool(func_byte & 0x08)
-        status.triggered = bool(func_byte & 0x04) or bool(func_byte & 0x44)
+        status.triggered = bool(func_byte & 0x04)
         status.siren_on = bool(func_byte & 0x02)
         status.has_problem = bool(func_byte & 0x11)
         
@@ -557,7 +557,7 @@ class PartialCentralStatus:
         # === Funcionamento (Status23, byte 22) ===
         func_byte = data[22]
         status.armed = bool(func_byte & 0x08)
-        status.triggered = bool(func_byte & 0x04) or bool(func_byte & 0x44)
+        status.triggered = bool(func_byte & 0x04)
         status.siren_on = bool(func_byte & 0x02)
         status.has_problem = bool(func_byte & 0x11)
         
@@ -665,4 +665,3 @@ class PartialCentralStatus:
             f"siren={self.siren_on}, "
             f"problems={self.problems.has_problems})"
         )
-
