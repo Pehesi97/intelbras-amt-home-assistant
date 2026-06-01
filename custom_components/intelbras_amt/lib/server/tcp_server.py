@@ -15,9 +15,9 @@ import logging
 from typing import Callable, Awaitable
 from dataclasses import dataclass, field
 
-from ..const import DEFAULT_PORT, RESPONSE_TIMEOUT
+from ..const import CommandCode, DEFAULT_PORT, RESPONSE_TIMEOUT
 from ..protocol.isecnet import ISECNetFrame, ISECNetFrameReader
-from ..protocol.responses import Response
+from ..protocol.responses import Response, ResponseType
 from ..protocol.commands.connection import ConnectionInfo, CONNECTION_INFO_COMMAND
 from .connection_manager import ConnectionManager, AMTConnection
 
@@ -333,16 +333,27 @@ class AMTServer:
                     # Verifica se há resposta pendente
                     # IMPORTANTE: Heartbeats e comandos auto-tratados NÃO preenchem pending_response
                     if connection.pending_response and not is_auto_handled:
-                        logger.debug(
-                            f"Preenchendo resposta pendente de {connection_id} com frame: "
-                            f"command=0x{frame.command:02X}, content={frame.content.hex(' ')}"
-                        )
-                        if not connection.pending_response.done():
-                            connection.pending_response.set_result(frame)
-                            connection.pending_response = None
+                        if self._matches_pending_response(connection, frame):
+                            logger.debug(
+                                f"Preenchendo resposta pendente de {connection_id} com frame: "
+                                f"command=0x{frame.command:02X}, content={frame.content.hex(' ')}"
+                            )
+                            if not connection.pending_response.done():
+                                connection.pending_response.set_result(frame)
+                                connection.pending_response = None
+                                connection.pending_response_kind = None
+                            else:
+                                logger.warning(
+                                    f"Tentativa de preencher pending_response já concluído para {connection_id}"
+                                )
                         else:
                             logger.warning(
-                                f"Tentativa de preencher pending_response já concluído para {connection_id}"
+                                "Frame inesperado ignorado enquanto aguardava %s de %s: "
+                                "command=0x%02X, content=%s",
+                                connection.pending_response_kind,
+                                connection_id,
+                                frame.command,
+                                frame.content.hex(' '),
                             )
                     elif not is_auto_handled:
                         # Notifica callbacks de frame (apenas se não foi auto-tratado)
@@ -444,6 +455,57 @@ class AMTServer:
         connection.writer.write(ack_data)
         await connection.writer.drain()
 
+    def _expected_response_kind(self, frame: ISECNetFrame) -> str:
+        """Retorna o tipo de resposta esperado para o comando enviado."""
+        if not frame.is_mobile_command:
+            return "any"
+
+        command = self._outgoing_mobile_command(frame)
+        if command is None:
+            return "any"
+
+        if command == CommandCode.STATUS_REQUEST_PARTIAL:
+            return "status_partial"
+        if command == CommandCode.STATUS_REQUEST:
+            return "status_full"
+        return "ack"
+
+    @staticmethod
+    def _outgoing_mobile_command(frame: ISECNetFrame) -> int | None:
+        """Extrai o comando do frame enviado sem depender do tamanho da senha."""
+        content = frame.content
+        if len(content) < 3 or content[0] != 0x21 or content[-1] != 0x21:
+            return None
+
+        for byte in content[1:-1]:
+            if not 0x30 <= byte <= 0x39:
+                return byte
+        return None
+
+    def _matches_pending_response(
+        self,
+        connection: AMTConnection,
+        frame: ISECNetFrame,
+    ) -> bool:
+        """Verifica se o frame recebido corresponde ao comando pendente."""
+        expected = connection.pending_response_kind
+        if expected in (None, "any"):
+            return True
+
+        response = Response.from_isecnet_frame(frame)
+        if expected == "ack":
+            return response.response_type in (ResponseType.ACK, ResponseType.NACK)
+
+        if response.response_type == ResponseType.NACK:
+            return True
+
+        if expected == "status_partial":
+            return response.response_type == ResponseType.DATA and len(frame.content) == 43
+        if expected == "status_full":
+            return response.response_type == ResponseType.DATA and len(frame.content) == 54
+
+        return True
+
     async def _send_and_wait(
         self,
         connection: AMTConnection,
@@ -472,7 +534,11 @@ class AMTServer:
             if wait_response:
                 # Prepara para aguardar resposta
                 connection.pending_response = asyncio.get_event_loop().create_future()
-                logger.debug(f"Criado pending_response para {connection.id}, aguardando resposta...")
+                connection.pending_response_kind = self._expected_response_kind(frame)
+                logger.debug(
+                    f"Criado pending_response para {connection.id}, "
+                    f"aguardando {connection.pending_response_kind}..."
+                )
             
             # Envia dados
             connection.writer.write(data)
@@ -499,6 +565,7 @@ class AMTServer:
                     f"pending_response ainda existe: {connection.pending_response is not None}"
                 )
                 connection.pending_response = None
+                connection.pending_response_kind = None
                 raise TimeoutError(
                     f"Timeout aguardando resposta de {connection.id} "
                     f"({self._config.response_timeout}s)"
@@ -512,4 +579,3 @@ class AMTServer:
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """Context manager: para servidor."""
         await self.stop()
-

@@ -34,6 +34,7 @@ class AMTConnection:
     writer: asyncio.StreamWriter
     connected_at: datetime = field(default_factory=datetime.now)
     pending_response: asyncio.Future | None = None
+    pending_response_kind: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     _command_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     """Lock para serializar envio de comandos. Garante que apenas um comando aguarda resposta por vez."""
@@ -254,4 +255,3 @@ class ConnectionManager:
 
     def __repr__(self) -> str:
         return f"ConnectionManager(connections={self.count})"
-
