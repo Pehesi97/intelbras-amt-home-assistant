@@ -39,6 +39,7 @@ if _HAS_HOMEASSISTANT:
     # Importa da biblioteca local
     from .lib.server import AMTServer, AMTServerConfig
     from .lib.protocol.isecnet import ISECNetFrame
+    from .lib.protocol.commands import CentralStatus, PartialCentralStatus
 
     PLATFORMS: list[Platform] = [
         Platform.ALARM_CONTROL_PANEL,
@@ -112,6 +113,29 @@ if _HAS_HOMEASSISTANT:
         @server.on_frame
         async def on_frame_received(conn, frame: ISECNetFrame):
             """Chamado quando um frame é recebido (exceto heartbeat)."""
+            if frame.is_mobile_command and len(frame.content) in (43, 54):
+                status = (
+                    CentralStatus.try_parse(frame.content)
+                    if len(frame.content) == 54
+                    else PartialCentralStatus.try_parse(frame.content)
+                )
+                current_status = coordinator.data
+                if (
+                    status
+                    and current_status
+                    and status.central_datetime
+                    and current_status.central_datetime
+                    and status.central_datetime < current_status.central_datetime
+                ):
+                    return
+                if status and (
+                    not current_status or current_status.raw_data != status.raw_data
+                ):
+                    if coordinator._detected_model is None:
+                        coordinator._detected_model = status.model
+                    coordinator.async_set_updated_data(status)
+                return
+
             _LOGGER.debug(f"Frame recebido de {conn.id}: {frame}")
             
             # Dispara evento no HA para que entidades possam reagir

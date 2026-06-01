@@ -263,17 +263,12 @@ class IntelbrasAMTAlarm(CoordinatorEntity[AMTCoordinator], AlarmControlPanelEnti
         try:
             # Desarma todas as áreas
             cmd = DeactivationCommand.disarm_all(password)
-            response = await server.send_command(
+            await server.send_command(
                 connection_id,
                 cmd.build_net_frame(),
-                wait_response=True,
+                wait_response=False,
             )
-            
-            if response.is_success:
-                _LOGGER.info("Alarme desarmado com sucesso!")
-                await self.coordinator.async_request_refresh()
-            else:
-                _LOGGER.error(f"Erro ao desarmar alarme: {response.message}")
+            _LOGGER.info("Comando de desarme enviado para a central")
                 
         except TimeoutError:
             _LOGGER.error("Timeout aguardando resposta da central")
@@ -299,17 +294,12 @@ class IntelbrasAMTAlarm(CoordinatorEntity[AMTCoordinator], AlarmControlPanelEnti
         
         try:
             # Envia comando e aguarda resposta
-            response = await server.send_command(
+            await server.send_command(
                 connection_id,
                 cmd.build_net_frame(),
-                wait_response=True,
+                wait_response=False,
             )
-            
-            if response.is_success:
-                _LOGGER.info("Alarme armado com sucesso!")
-                await self.coordinator.async_request_refresh()
-            else:
-                _LOGGER.error(f"Erro ao armar alarme: {response.message}")
+            _LOGGER.info("Comando de arme enviado para a central")
                 
         except TimeoutError:
             _LOGGER.error("Timeout aguardando resposta da central")

@@ -109,17 +109,12 @@ class AMTGeneralArmSwitch(CoordinatorEntity[AMTCoordinator], SwitchEntity):
         try:
             # Arma todas as áreas (sem especificar partição)
             cmd = ActivationCommand.arm_all(password=self._password)
-            response = await self._server.send_command(
+            await self._server.send_command(
                 connection_id,
                 cmd.build_net_frame(),
-                wait_response=True,
+                wait_response=False,
             )
-            
-            if response.is_success:
-                _LOGGER.info("Alarme armado (todas as áreas) com sucesso")
-                await self.coordinator.async_request_refresh()
-            else:
-                _LOGGER.error(f"Erro ao armar alarme: {response.message}")
+            _LOGGER.info("Comando de armar alarme (todas as áreas) enviado")
         except Exception as e:
             _LOGGER.error(f"Erro ao armar alarme: {e}")
     
@@ -133,17 +128,12 @@ class AMTGeneralArmSwitch(CoordinatorEntity[AMTCoordinator], SwitchEntity):
         try:
             # Desarma todas as áreas
             cmd = DeactivationCommand.disarm_all(self._password)
-            response = await self._server.send_command(
+            await self._server.send_command(
                 connection_id,
                 cmd.build_net_frame(),
-                wait_response=True,
+                wait_response=False,
             )
-            
-            if response.is_success:
-                _LOGGER.info("Alarme desarmado (todas as áreas) com sucesso")
-                await self.coordinator.async_request_refresh()
-            else:
-                _LOGGER.error(f"Erro ao desarmar alarme: {response.message}")
+            _LOGGER.info("Comando de desarmar alarme (todas as áreas) enviado")
         except Exception as e:
             _LOGGER.error(f"Erro ao desarmar alarme: {e}")
 
@@ -423,17 +413,12 @@ class AMTPartitionSwitch(CoordinatorEntity[AMTCoordinator], SwitchEntity):
                 _LOGGER.error(f"Partição inválida: {self.partition}")
                 return
             
-            response = await self._server.send_command(
+            await self._server.send_command(
                 connection_id,
                 cmd.build_net_frame(),
-                wait_response=True,
+                wait_response=False,
             )
-            
-            if response.is_success:
-                _LOGGER.info(f"Partição {self.partition} armada com sucesso")
-                await self.coordinator.async_request_refresh()
-            else:
-                _LOGGER.error(f"Erro ao armar partição {self.partition}: {response.message}")
+            _LOGGER.info(f"Comando de armar partição {self.partition} enviado")
         except Exception as e:
             _LOGGER.error(f"Erro ao armar partição {self.partition}: {e}")
     
@@ -458,17 +443,11 @@ class AMTPartitionSwitch(CoordinatorEntity[AMTCoordinator], SwitchEntity):
                 _LOGGER.error(f"Partição inválida: {self.partition}")
                 return
             
-            response = await self._server.send_command(
+            await self._server.send_command(
                 connection_id,
                 cmd.build_net_frame(),
-                wait_response=True,
+                wait_response=False,
             )
-            
-            if response.is_success:
-                _LOGGER.info(f"Partição {self.partition} desarmada com sucesso")
-                await self.coordinator.async_request_refresh()
-            else:
-                _LOGGER.error(f"Erro ao desarmar partição {self.partition}: {response.message}")
+            _LOGGER.info(f"Comando de desarmar partição {self.partition} enviado")
         except Exception as e:
             _LOGGER.error(f"Erro ao desarmar partição {self.partition}: {e}")
-
