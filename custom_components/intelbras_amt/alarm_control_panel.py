@@ -1,7 +1,7 @@
 """Entidade Alarm Control Panel para Intelbras AMT 2018 / 4010."""
 
 import logging
-from datetime import datetime
+import time
 from typing import Any
 
 from homeassistant.components.alarm_control_panel import (
@@ -24,6 +24,8 @@ from .const import DOMAIN, CONF_PASSWORD, ATTR_CONNECTED, ATTR_LAST_HEARTBEAT
 from .coordinator import AMTCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+_SIREN_TRIGGER_FALLBACK_SECONDS = 4.0
 
 
 async def async_setup_entry(
@@ -60,6 +62,7 @@ class IntelbrasAMTAlarm(CoordinatorEntity[AMTCoordinator], AlarmControlPanelEnti
         self.hass = hass
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_alarm"
+        self._siren_on_since: float | None = None
         
     @property
     def device_info(self):
@@ -82,9 +85,21 @@ class IntelbrasAMTAlarm(CoordinatorEntity[AMTCoordinator], AlarmControlPanelEnti
             return None
         
         status = self.coordinator.data
+
+        if status.siren_on:
+            if self._siren_on_since is None:
+                self._siren_on_since = time.monotonic()
+        else:
+            self._siren_on_since = None
         
-        # Zonas podem ficar marcadas como violadas mesmo com a central desarmada.
-        if status.siren_on or (status.armed and status.triggered):
+        if status.triggered:
+            return AlarmControlPanelState.TRIGGERED
+
+        if (
+            status.siren_on
+            and self._siren_on_since is not None
+            and time.monotonic() - self._siren_on_since >= _SIREN_TRIGGER_FALLBACK_SECONDS
+        ):
             return AlarmControlPanelState.TRIGGERED
         
         # Verifica se está armada
