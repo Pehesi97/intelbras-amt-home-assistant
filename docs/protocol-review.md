@@ -372,3 +372,36 @@ problema desligados; zona 41 mantém problema desconhecido por falta de diagnós
 O recorder começou a registrar após a reconexão; não capturou um estado intermediário
 indisponível nessa inicialização. A indisponibilidade e as corridas de conexão
 foram verificadas no roteiro nativo temporário. Não houve novos disparos físicos.
+
+
+## Beta 1.0.0b5 — diagnóstico e issue #8 — 14/09/2026
+
+O usuário confirmou que **Baixar diagnóstico funciona no navegador**, embora
+no aplicativo usado o clique não tenha gerado arquivo nem erro visível. Não foi
+necessário alterar `diagnostics.py`; o caminho de download do aplicativo continua
+sem causa específica identificada.
+
+A [atualização do autor da issue #8](https://github.com/Pehesi97/intelbras-amt-home-assistant/issues/8#issuecomment-5328597331)
+relata AMT 4010 Smart firmware 3.9: senha remota recusada com `0xE2`, senha do
+computador aceita com `0x5B` e `0x5A` recusado com `0xE5`. O teste publicado usou
+cliente conectado à central, enquanto a integração recebe a conexão da central.
+A beta adiciona senha opcional exclusiva para consultas; a senha dos comandos
+permanece independente. Entradas existentes mantêm o comportamento anterior.
+O tratamento de `0xE1`/`0xE2` orienta conferir a senha, preservando a descrição
+original do erro, sem afirmar que todo `0xE2` seja credencial incorreta.
+
+Validação: 99 testes locais, incluindo o frame público completo de 57 bytes,
+fallback de `0x5A` para `0x5B` e permanência no comando completo após detecção.
+Verificações nativas no HA 2026.8.1 passaram com configuração temporária: senhas
+separadas, compatibilidade das entradas antigas, campos vazios preservando as
+senhas, validação numérica e ausência de ambas as senhas no diagnóstico.
+A operação com senha separada na AMT 4010 física permanece pendente.
+
+Instalada a `1.0.0b5` no HA do usuário, com backup em
+`/config/intelbras_amt_backups/major-1.0.0b5-20260914T235051Z`.
+Arquivos instalados conferidos por SHA-256; 139 registros preservados integralmente,
+assim como configuração e opções (12 zonas, PGMs 1 e 2, intervalo de 2 segundos).
+A AMT 2018 reconectou às 20:51:16; modelo detectado às 20:51:18. HTTP 200 e registros
+posteriores ao reinício confirmam alarme desarmado e abertura da zona 25 em `off`.
+Não foram enviados comandos de arme/desarme ou disparo para essa validação.
+A versão estável publicada continua sendo `0.7.4`; a beta permanece local.

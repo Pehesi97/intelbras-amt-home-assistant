@@ -11,7 +11,7 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
-    DOMAIN, CONF_PASSWORD, CONF_PORT, CONF_UPDATE_INTERVAL,
+    DOMAIN, CONF_PASSWORD, CONF_STATUS_PASSWORD, CONF_PORT, CONF_UPDATE_INTERVAL,
     DEFAULT_PORT, DEFAULT_UPDATE_INTERVAL,
 )
 from .lib.const import CentralModel
@@ -22,6 +22,7 @@ def _connection_schema(defaults, reconfigure=False):
     fields = {
         vol.Required(CONF_PORT, default=defaults.get(CONF_PORT, DEFAULT_PORT)): int,
         password_field: selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)),
+        vol.Optional(CONF_STATUS_PASSWORD): selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)),
     }
     if not reconfigure:
         fields[vol.Required(CONF_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL)] = int
@@ -31,12 +32,15 @@ def _connection_schema(defaults, reconfigure=False):
 def _connection_errors(data):
     errors = {}
     port = data.get(CONF_PORT)
-    password = data.get(CONF_PASSWORD, "")
     interval = data.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
     if type(port) is not int or not 1 <= port <= 65535:
         errors[CONF_PORT] = "invalid_port"
-    if not isinstance(password, str) or not (4 <= len(password) <= 6 and password.isascii() and password.isdigit()):
-        errors[CONF_PASSWORD] = "invalid_password"
+    for key in (CONF_PASSWORD, CONF_STATUS_PASSWORD):
+        password = data.get(key, "")
+        if key == CONF_STATUS_PASSWORD and password == "":
+            continue
+        if not isinstance(password, str) or not (4 <= len(password) <= 6 and password.isascii() and password.isdigit()):
+            errors[key] = "invalid_password"
     if type(interval) is not int or not 1 <= interval <= 60:
         errors[CONF_UPDATE_INTERVAL] = "invalid_update_interval"
     return errors
@@ -67,8 +71,9 @@ class IntelbrasAMTConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             data = {**entry.data, CONF_PORT: user_input.get(CONF_PORT)}
             # Campo vazio mantém a senha atual; ela nunca é preenchida no formulário.
-            if user_input.get(CONF_PASSWORD):
-                data[CONF_PASSWORD] = user_input[CONF_PASSWORD]
+            for key in (CONF_PASSWORD, CONF_STATUS_PASSWORD):
+                if user_input.get(key):
+                    data[key] = user_input[key]
             errors = _connection_errors(data)
             if any(other.entry_id != entry.entry_id and other.data.get(CONF_PORT) == data[CONF_PORT]
                    for other in self._async_current_entries()):

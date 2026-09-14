@@ -27,7 +27,7 @@ if _HAS_HOMEASSISTANT:
     from datetime import datetime
     from pathlib import Path
 
-    from .const import DOMAIN, CONF_PORT, CONF_PASSWORD, CONF_UPDATE_INTERVAL, DEFAULT_PORT, DEFAULT_UPDATE_INTERVAL
+    from .const import DOMAIN, CONF_PORT, CONF_PASSWORD, CONF_STATUS_PASSWORD, CONF_UPDATE_INTERVAL, DEFAULT_PORT, DEFAULT_UPDATE_INTERVAL
     from .coordinator import AMTCoordinator
     from .entity_selection import async_apply_entity_selection
     from homeassistant.helpers.update_coordinator import UpdateFailed
@@ -78,7 +78,7 @@ if _HAS_HOMEASSISTANT:
             hass=hass,
             server=server,
             connection_id=None,  # Será atualizado quando conectar
-            password=password,
+            password=entry.data.get(CONF_STATUS_PASSWORD) or password,
             entry_id=entry.entry_id,
             update_interval=update_interval,
         )

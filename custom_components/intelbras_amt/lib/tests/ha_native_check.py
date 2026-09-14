@@ -87,6 +87,25 @@ async def main():
             assert main_entry.data["port"] == 9011 and main_entry.unique_id == "intelbras_amt_9011"
             reload.assert_awaited_once_with(main_entry.entry_id)
 
+        # Separate status password is validated, preserved when blank, never prefilled.
+        initial = IntelbrasAMTConfigFlow()
+        initial.hass = hass
+        initial.context = {"source": "user"}
+        for invalid in ("12ab", "１２３４", "123", "1234567", None):
+            values = {"port": 9020, "password": "123456", "status_password": invalid}
+            assert (await initial.async_step_user(values))["errors"]["status_password"] == "invalid_password"
+        for optional in ({}, {"status_password": ""}, {"status_password": "654321"}):
+            result = await initial.async_step_user({"port": 9020, "password": "123456", **optional})
+            assert result["type"] == "create_entry"
+        with patch.object(hass.config_entries, "async_reload", AsyncMock(return_value=True)):
+            await flow.async_step_reconfigure({"port": 9011, "status_password": "654321"})
+            await hass.async_block_till_done()
+            await flow.async_step_reconfigure({"port": 9011, "password": "", "status_password": ""})
+            await hass.async_block_till_done()
+        assert main_entry.data["password"] == "123456" and main_entry.data["status_password"] == "654321"
+        result = await flow.async_step_reconfigure()
+        assert all(secret not in repr(result) for secret in ("123456", "654321"))
+
         # Options validate choices, normalize strings, allow empty selections.
         options = IntelbrasAMTOptionsFlow()
         options.hass = hass
@@ -140,6 +159,7 @@ async def main():
             assert await integration.async_setup_entry(hass, main_entry)
         runtime = hass.data["intelbras_amt"][main_entry.entry_id]
         live = runtime["coordinator"]
+        assert live.password == "654321" and runtime["password"] == "123456"
         server = runtime["server"]
         live._detected_model = 0x1E
         live._fetch_partial_status = AsyncMock(return_value=status)
@@ -166,9 +186,18 @@ async def main():
         coordinator.connection_id = "192.0.2.55:1234"
         diagnostics = await async_get_config_entry_diagnostics(hass, main_entry)
         serialized = json.dumps(diagnostics)
-        assert all(secret not in serialized for secret in ("123456", "192.0.2.55", main_entry.entry_id, "raw_data"))
+        assert all(secret not in serialized for secret in ("123456", "654321", "192.0.2.55", main_entry.entry_id, "raw_data"))
         assert diagnostics["successful_polls"] == 1 and diagnostics["last_successful_poll"]
         await coordinator.async_shutdown()
+
+        # Existing entries keep using their command password for polling.
+        with patch.object(integration.AMTServer, "start", AsyncMock()), patch.object(
+            hass.config_entries, "async_forward_entry_setups", AsyncMock(),
+        ):
+            assert await integration.async_setup_entry(hass, other_entry)
+        legacy = hass.data["intelbras_amt"][other_entry.entry_id]
+        assert legacy["coordinator"].password == legacy["password"] == "123456"
+        await legacy["coordinator"].async_shutdown()
         await hass.async_stop(force=True)
         print("HA native checks passed: availability, reconfiguration, selection, diagnostics")
 

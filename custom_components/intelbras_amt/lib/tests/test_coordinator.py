@@ -105,3 +105,42 @@ async def test_timeout_and_connection_replacement_are_not_valid_status(coordinat
     with pytest.raises(Exception, match="substituída"):
         await coordinator._async_update_data()
     assert coordinator.successful_polls == 0
+
+
+async def test_issue8_computer_password_and_captured_4010_status(coordinator_class):
+    # Public AMT 4010 Smart firmware 3.9 capture, issue #8, comment 5328597331.
+    full = Response.parse(bytes.fromhex(
+        "37 e9 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 41 39 01 00 00 11 0a 0c 12 08 1a 00 00 00 00 00 0f 00 08 00 00 00 00 00 00 00 00 00 00 00 48"
+    ))
+    coordinator = object.__new__(coordinator_class)
+    coordinator.connection_id = "test"
+    coordinator.password = "654321"
+    coordinator.successful_polls = coordinator.failed_polls = 0
+    coordinator._detected_model = None
+    coordinator.server = AsyncMock()
+    coordinator.server.send_command.side_effect = [
+        Response.from_isecnet_frame(ISECNetFrame.create_mobile_frame(bytes([0xE5]))), full, full,
+    ]
+    await coordinator._async_update_data()
+    status = await coordinator._async_update_data()
+    assert status.model == CentralModel.AMT_4010 and status.firmware_version == "3.9"
+    assert status.partitions.partitions_enabled and not status.armed
+    frames = [call.args[1].content for call in coordinator.server.send_command.call_args_list]
+    assert frames == [b"!654321\x5a!", b"!654321\x5b!", b"!654321\x5b!"]
+
+
+@pytest.mark.parametrize("method", ["_fetch_partial_status", "_fetch_full_status"])
+@pytest.mark.parametrize("code,hint", [(0xE1, True), (0xE2, True), (0xE5, False)])
+async def test_status_rejection_is_actionable_without_exposing_password(coordinator_class, method, code, hint):
+    coordinator = object.__new__(coordinator_class)
+    coordinator.connection_id = "test"
+    coordinator.password = "654321"
+    response = Response.from_isecnet_frame(ISECNetFrame.create_mobile_frame(bytes([code])))
+    coordinator.server = AsyncMock()
+    coordinator.server.send_command.return_value = response
+    with pytest.raises(Exception) as error:
+        await getattr(coordinator, method)()
+    message = str(error.value)
+    assert f"0x{code:02X}" in message and response.message in message
+    assert ("senha do computador" in message) == hint
+    assert "654321" not in message

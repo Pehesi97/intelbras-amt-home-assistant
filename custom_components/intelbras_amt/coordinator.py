@@ -26,6 +26,16 @@ _MIN_HEARTBEAT_REFRESH_INTERVAL = 2.0
 """Intervalo mínimo (em segundos) entre refreshes disparados por heartbeat."""
 
 
+def _status_error(response, kind):
+    message = f"Erro ao buscar status {kind}: {response.message} (0x{response.code:02X})"
+    if response.response_type == ResponseType.NACK and response.code in (0xE1, 0xE2):
+        message += (
+            ". Confira a senha para consulta de status em Reconfigurar; "
+            "na AMT 4010, a consulta pode exigir a senha do computador."
+        )
+    return UpdateFailed(message)
+
+
 class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus | None]):
     """Coordinator para atualizar status da central periodicamente.
     
@@ -54,7 +64,7 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
             hass: Instância do Home Assistant.
             server: Servidor AMT.
             connection_id: ID da conexão ativa.
-            password: Senha da central.
+            password: Senha para consulta de status (independente dos comandos).
             entry_id: ID da config entry.
             update_interval: Intervalo de polling em segundos (padrão: 5s).
         """
@@ -203,7 +213,7 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
                 return status
             raise UpdateFailed("Não foi possível parsear status parcial")
         else:
-            raise UpdateFailed(f"Erro ao buscar status parcial: {response.message}")
+            raise _status_error(response, "parcial")
     
     async def _fetch_full_status(self) -> CentralStatus | None:
         """Busca status completo (0x5B) - 54 bytes."""
@@ -221,4 +231,4 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
                 return status
             raise UpdateFailed("Não foi possível parsear status completo")
         else:
-            raise UpdateFailed(f"Erro ao buscar status completo: {response.message}")
+            raise _status_error(response, "completo")

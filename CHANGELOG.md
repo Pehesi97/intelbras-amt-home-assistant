@@ -1,9 +1,25 @@
 # Changelog
 
-## 1.0.0b4 — candidata major, não publicada
+## 1.0.0b5 — candidata major, não publicada
 
 Inclui os fixes da 0.7.4 e reorganiza as informações de zona. Esta beta separa
 as mudanças de apresentação/entidades da atualização de manutenção.
+
+### Melhorias da beta 5
+
+- Issue #8: senha opcional para consultas de status, separada da senha de comandos.
+  Na AMT 4010, permite usar a senha do computador sem alterar a senha usada para
+  arme/desarme. Entradas existentes continuam usando a senha atual por padrão.
+- Recusas `0xE1`/`0xE2` nas consultas incluem o código e orientação para conferir
+  a senha específica. `0xE2` continua significando comando inválido; não é prova
+  isolada de senha incorreta.
+- Frame real da AMT 4010 Smart firmware 3.9 publicado na issue coberto por teste:
+  recusa `0x5A` com `0xE5`, resposta válida de `0x5B` e consultas posteriores
+  diretamente por `0x5B`. Validação física com senha separada na 4010 pendente.
+- Download do diagnóstico confirmado pelo usuário no navegador. No aplicativo
+  utilizado, o botão não gerou arquivo; nenhuma alteração no backend foi necessária.
+- 99 testes locais e verificações nativas de senhas separadas, preservação da
+  configuração antiga e ausência de ambas as senhas no diagnóstico.
 
 ### Melhorias da beta 4
 
