@@ -24,7 +24,7 @@ A integração **detecta automaticamente** o modelo da central e usa o comando a
 
 ## Requisitos
 
-- **Home Assistant**: 2023.1.0 ou superior
+- **Home Assistant**: validado com 2026.8.1; versões anteriores não foram verificadas para a v1
 - **Central Intelbras**: AMT 2018 E/EG/E SMART ou AMT 4010 com firmware compatível
 - **Conexão de rede** entre a central e o Home Assistant
 - **Senha da central** (4-6 dígitos configurada na central)
@@ -70,7 +70,8 @@ A revisão do SDK, as divergências encontradas e o roteiro de validação das i
 
 ## Status do Projeto
 
-🟢 **Funcional** - Integração completa e testada com central real
+🟢 **Funcional** - Validada com AMT 2018 E/EG real. A senha separada da AMT 4010
+e os cenários de partições ainda têm [limites de validação](docs/protocol-review.md).
 
 | Componente | Status | Descrição |
 |------------|--------|-----------|
@@ -149,12 +150,23 @@ particionadas. Veja os [testes e limites da mitigação](docs/protocol-review.md
   - Linha Telefônica Cortada
   - Falha Comunicação
 
-## Reconfiguração e opções da beta
+## Reconfiguração, opções e diagnóstico
 
-A beta permite alterar porta/senha em **Reconfigurar**, escolher zonas/PGMs e
+A versão 1.0 permite alterar porta/senhas em **Reconfigurar**, escolher zonas/PGMs e
 intervalo em **Opções**, e **Baixar diagnóstico** na página da integração.
 Sem conexão, as entidades ficam indisponíveis até receber novo status válido.
 Veja [os detalhes e a preservação dos IDs](docs/beta-options.md).
+
+## Atualização da 0.x para a 1.0
+
+A v1 remove as entidades auxiliares de violação, bypass, bateria baixa, tamper e
+curto de cada zona, inclusive as desabilitadas. Esses dados passam aos atributos
+de `Zona NN`; `Zona NN - Problema` agrupa bateria baixa, tamper e curto.
+
+Faça backup e adapte dashboards/automações antes de atualizar. O sensor de abertura
+mantém o ID já registrado e as personalizações, mas seu nome padrão passa a `Zona NN`.
+Não é necessário remover ou recadastrar a integração. Veja o
+[guia de migração](docs/zone-attributes.md) e o [changelog](CHANGELOG.md).
 
 ## Instalação no Home Assistant
 
@@ -178,7 +190,9 @@ Veja [os detalhes e a preservação dos IDs](docs/beta-options.md).
 
 8. Configure:
    - **Porta TCP**: 9009 (ou outra porta disponível)
-   - **Senha**: A senha de 4-6 dígitos configurada na central
+   - **Senha para comandos**: A senha de 4–6 dígitos configurada na central
+   - **Senha para consulta de status** (opcional): na AMT 4010, pode ser necessário
+     usar a senha do computador. Sem ela, as consultas usam a senha dos comandos.
 
 ### Opção 2: Instalação Manual (Custom Components)
 
@@ -238,7 +252,9 @@ Veja [os detalhes e a preservação dos IDs](docs/beta-options.md).
 
 7. Configure:
    - **Porta TCP**: 9009 (ou outra porta disponível)
-   - **Senha**: A senha de 4-6 dígitos configurada na central
+   - **Senha para comandos**: A senha de 4–6 dígitos configurada na central
+   - **Senha para consulta de status** (opcional): na AMT 4010, pode ser necessário
+     usar a senha do computador. Sem ela, as consultas usam a senha dos comandos.
 
 ### Configuração da Central AMT 2018 / 4010
 

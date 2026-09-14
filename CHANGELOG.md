@@ -1,11 +1,12 @@
 # Changelog
 
-## 1.0.0b5 — candidata major, não publicada
+## 1.0.0 — 2026-09-14
 
-Inclui os fixes da 0.7.4 e reorganiza as informações de zona. Esta beta separa
-as mudanças de apresentação/entidades da atualização de manutenção.
+Inclui os fixes da 0.7.4 e reorganiza as informações de zona em sensores de
+abertura e problema, com atributos de diagnóstico. **A atualização remove as
+antigas entidades auxiliares de zona.** Leia a migração abaixo antes de atualizar.
 
-### Melhorias da beta 5
+### Consulta de status e diagnóstico
 
 - Issue #8: senha opcional para consultas de status, separada da senha de comandos.
   Na AMT 4010, permite usar a senha do computador sem alterar a senha usada para
@@ -21,7 +22,7 @@ as mudanças de apresentação/entidades da atualização de manutenção.
 - 99 testes locais e verificações nativas de senhas separadas, preservação da
   configuração antiga e ausência de ambas as senhas no diagnóstico.
 
-### Melhorias da beta 4
+### Conexão e configuração
 
 - Entidades ficam indisponíveis durante desconexão e até o primeiro status válido;
   respostas e desconexões de conexões antigas não alteram a conexão atual.
@@ -31,8 +32,8 @@ as mudanças de apresentação/entidades da atualização de manutenção.
   desabilita sem apagar registros e respeita desabilitações manuais.
 - Diagnóstico para download com campos explícitos, sem credenciais, endereços ou
   frames brutos. Inclui horário e contadores de consultas válidas/falhas.
-- 92 testes locais; fluxos, seleção e disponibilidade validados também com classes
-  reais do HA. Veja [uso e validação](docs/beta-options.md).
+- Fluxos, seleção e disponibilidade validados também com classes reais do HA.
+  Veja [uso e validação](docs/beta-options.md).
 
 ### Breaking changes e migração
 
@@ -46,7 +47,6 @@ as mudanças de apresentação/entidades da atualização de manutenção.
   deixam de ser entidades separadas. A atualização remove seus registros,
   inclusive os desabilitados, pela API nativa do HA. Ajuste dashboards e
   automações para os atributos do sensor principal antes de atualizar.
-  Esta mudança substitui a estratégia da beta 1 de manter auxiliares desabilitadas.
 - **Atributos novos no principal:** `violada`, `bypass`, `bateria_baixa`,
   `tamper` e `curto_circuito`. `null` significa informação indisponível; `false`
   significa que o status não indica o alerta. Bateria não é porcentagem.
@@ -57,7 +57,7 @@ as mudanças de apresentação/entidades da atualização de manutenção.
   conforme ISECMobile R15, em vez de 9–16. IDs não mudam, mas a associação do
   alerta à zona é corrigida. Remova eventuais compensações feitas em automações.
 
-### Entidade agrupada de problema (beta 3)
+### Entidade agrupada de problema
 
 - Adicionada `Zona NN - Problema` para cada zona, com os cinco atributos de diagnóstico.
 - Estado ligado se bateria baixa, tamper ou curto estiver verdadeiro. Bypass e
@@ -71,7 +71,8 @@ as mudanças de apresentação/entidades da atualização de manutenção.
 
 - Estado principal de abertura, IDs e configurações dos sensores principais.
 - Comandos de arme/desarme, sirene, PGM, partições e entidades globais.
-- Configurações de todas as entidades que permanecem; sem alteração de `disabled_by`.
+- Personalizações das entidades mantidas e desabilitações manuais. A seleção
+  de zonas/PGMs altera somente a habilitação controlada pela integração.
 
 Veja [a migração por atributos](docs/zone-attributes.md). Faça backup antes de
 instalar. Para voltar com as personalizações das auxiliares, restaure o backup

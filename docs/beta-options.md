@@ -1,4 +1,4 @@
-# Beta 1.0.0b5: conexão, opções e diagnóstico
+# Versão 1.0.0: conexão, opções e diagnóstico
 
 Na página da integração Intelbras AMT em **Configurações → Dispositivos e serviços**:
 

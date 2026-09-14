@@ -1,4 +1,4 @@
-# 1.0.0b4: detalhes da zona em atributos
+# 1.0.0: detalhes da zona em atributos
 
 Cada zona possui duas entidades: `Zona NN` para abertura e `Zona NN - Problema`
 para falhas. As duas expõem os cinco atributos descritos abaixo. O sensor de
@@ -93,7 +93,7 @@ precisam remover a compensação. O status completo permanece com zonas 1–8.
 
 ## Conteúdo e validação
 
-A candidata major inclui também o reconhecimento AMT1000, as correções de transporte
+A versão 1.0.0 inclui também o reconhecimento AMT1000, as correções de transporte
 e a mitigação de partições da #10. Os limites desta última, incluindo memória
 antiga e pânico silencioso sem zona, estão em [protocol-review.md](protocol-review.md).
 
@@ -102,6 +102,6 @@ do ID principal e a remoção seletiva e idempotente das auxiliares. Os testes
 unitários usam substitutos das dependências do HA; a atualização é verificada
 separadamente no HA real, conforme [o changelog](../CHANGELOG.md).
 
-A candidata de manutenção **0.7.4** contém apenas os fixes das issues 9/10/11,
+A versão de manutenção **0.7.4** contém apenas os fixes das issues 9/10/11,
 preservando a estrutura anterior de entidades. As mudanças descritas neste
-documento pertencem exclusivamente à **1.0.0b4**. Consulte [o changelog](../CHANGELOG.md).
+documento pertencem exclusivamente à **1.0.0**. Consulte [o changelog](../CHANGELOG.md).
