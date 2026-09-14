@@ -27,9 +27,9 @@ def alarm_module(monkeypatch):
         "homeassistant.components.alarm_control_panel": {
             "AlarmControlPanelEntity": type("AlarmControlPanelEntity", (), {}),
             "AlarmControlPanelEntityFeature": SimpleNamespace(ARM_HOME=1, ARM_AWAY=2),
-            "AlarmControlPanelState": SimpleNamespace(
-                TRIGGERED="triggered", ARMED_AWAY="armed_away", DISARMED="disarmed",
-            ),
+            "AlarmControlPanelState": type("AlarmControlPanelState", (), {
+                "TRIGGERED": "triggered", "ARMED_AWAY": "armed_away", "DISARMED": "disarmed",
+            }),
             "CodeFormat": SimpleNamespace(NUMBER="number"),
         },
         "homeassistant.config_entries": {"ConfigEntry": object},
