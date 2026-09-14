@@ -342,3 +342,33 @@ com bateria baixa falsa e tamper/curto nulos; zona 41 está desconhecida porque
 nenhum dos três diagnósticos é reportado. Os cinco atributos estão nas duas
 entidades de cada zona. A central reconectou desarmada e com sirene desligada.
 Não houve disparo provocado nem teste físico de bateria, tamper ou curto.
+
+
+## Release 0.7.4 e beta 1.0.0b4 — 14/09/2026
+
+Publicada a release estável v0.7.4 no commit
+`df15e8b3f291f7858532a6fa64536dc67054071a`, com 56 testes aprovados no GitHub em
+Python 3.11 e 3.14. Uma fixture de teste foi corrigida para usar uma classe no
+lugar de SimpleNamespace em uma anotação de tipo no Python 3.11; runtime intacto.
+
+A beta 4 acrescenta disponibilidade correta, reconfiguração de porta/senha,
+seleção de zonas/PGMs e diagnóstico por lista explícita de campos. São 92 testes
+unitários, além do roteiro com as classes reais do HA descrito em
+[beta-options.md](beta-options.md). Nesse roteiro temporário, o alocador padrão
+causou falha de GC ao encerrar após as verificações; usando PYTHONMALLOC=malloc,
+o processo passou e encerrou com código zero. Isso não altera o HA em execução.
+
+Backup anterior à instalação:
+`/config/intelbras_amt_backups/major-1.0.0b4-20260914T233123Z`.
+Inclui componente, registro de entidades e configurações das entradas.
+A leitura anterior mostrou versão 0.7.4 com 311 registros, incluindo as 48
+entidades de problema da beta anterior. Após reinício e persistência do registro,
+a beta 4 manteve 139 registros e removeu exatamente 172 auxiliares. IDs, nomes
+personalizados e desabilitações mantidos; opções vazias preservadas.
+
+Os 32 arquivos de runtime instalados conferem por SHA-256. HA respondeu HTTP 200,
+central reconectou desarmada, sirene desligada. A zona 25 mantém abertura e
+problema desligados; zona 41 mantém problema desconhecido por falta de diagnóstico.
+O recorder começou a registrar após a reconexão; não capturou um estado intermediário
+indisponível nessa inicialização. A indisponibilidade e as corridas de conexão
+foram verificadas no roteiro nativo temporário. Não houve novos disparos físicos.

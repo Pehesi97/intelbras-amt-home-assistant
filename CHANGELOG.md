@@ -140,3 +140,16 @@ na 0.7.4 e da apresentação nova na major é feita separadamente.
   dados sintéticos, sem enviar comandos à central. Não houve teste de falha física.
 - Central reconectada, desarmada, sirene desligada. Arquivos instalados conferidos
   por SHA-256. A candidata 0.7.4 permanece inalterada; nenhuma release publicada.
+
+### Instalação da beta 4 no HA
+
+- Validada no HA Container 2026.8.1, com backup anterior à instalação.
+- O HA estava na 0.7.4 com 311 registros (incluindo entidades remanescentes da
+  beta 3). A migração removeu exatamente 172 auxiliares, mantendo 139 entidades,
+  seus IDs, nomes personalizados e desabilitações. As opções permaneceram vazias,
+  conservando a seleção padrão de zonas/PGMs.
+- Central reconectada e desarmada, interface HTTP 200 e 32 arquivos de runtime
+  verificados por SHA-256. O comportamento de desconexão e os fluxos que mudam
+  configuração foram testados em instância temporária do HA, sem alterar a
+  senha, porta ou seleção efetiva da instalação do usuário.
+- A v0.7.4 está publicada no GitHub. A beta 4 permanece separada, sem publicação.
