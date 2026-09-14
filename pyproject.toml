@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "intelbras-amt-homeassistant"
-version = "0.1.0"
+version = "0.7.4"
 description = "Integração Home Assistant para centrais Intelbras AMT (protocolo ISECNet/ISECMobile)"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -46,4 +46,3 @@ python_functions = ["test_*"]
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["custom_components*"]
-

@@ -98,7 +98,14 @@ class IntelbrasAMTAlarm(CoordinatorEntity[AMTCoordinator], AlarmControlPanelEnti
             return None
 
         if status.triggered and status.armed:
-            return "triggered_armed"
+            # O arme global não confirma abertura em uma partição desarmada.
+            # ponytail: memória antiga ainda passa; distinguir ocorrências exige
+            # dados de eventos e associação zona/partição.
+            if (
+                not status.partitions.partitions_enabled
+                or status.zones.violated_zones
+            ):
+                return "triggered_armed"
         if status.triggered and status.siren_on:
             return "triggered_with_siren"
         if self._siren_trigger_confirmed:
@@ -142,7 +149,7 @@ class IntelbrasAMTAlarm(CoordinatorEntity[AMTCoordinator], AlarmControlPanelEnti
             status.raw_data.hex(" "),
         )
 
-    def _log_ignored_disarmed_triggered(self) -> None:
+    def _log_ignored_triggered(self) -> None:
         """Loga quando o bit triggered é ignorado por não parecer disparo real."""
         status = self.coordinator.data
         if not status or not status.triggered:
@@ -154,16 +161,23 @@ class IntelbrasAMTAlarm(CoordinatorEntity[AMTCoordinator], AlarmControlPanelEnti
             return
 
         self._last_ignored_triggered_raw = raw_data
+        reason = (
+            "particionamento ativo sem zona violada"
+            if status.armed
+            else "central desarmada e sirene desligada"
+        )
         _LOGGER.warning(
-            "Ignorando bit triggered com central desarmada e sirene desligada: "
+            "Ignorando bit triggered: %s; "
             "armed=%s triggered=%s siren_on=%s func_byte=%s open_zones=%s "
-            "violated_zones=%s raw=%s",
+            "violated_zones=%s partitions=%s raw=%s",
+            reason,
             status.armed,
             status.triggered,
             status.siren_on,
             self._format_byte(self._function_byte()),
             sorted(status.zones.open_zones),
             sorted(status.zones.violated_zones),
+            status.partitions,
             raw_data.hex(" "),
         )
 
@@ -203,7 +217,7 @@ class IntelbrasAMTAlarm(CoordinatorEntity[AMTCoordinator], AlarmControlPanelEnti
 
         self._last_trigger_reason = None
         if status.triggered:
-            self._log_ignored_disarmed_triggered()
+            self._log_ignored_triggered()
         else:
             self._last_ignored_triggered_raw = None
         

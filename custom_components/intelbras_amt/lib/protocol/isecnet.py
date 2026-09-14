@@ -70,6 +70,11 @@ class ISECNetFrame:
             >>> frame.build().hex(' ')
             '08 e9 21 31 32 33 34 41 21 5b'
         """
+        # ISECnet R14: ACK do receptor é FE, sem tamanho nem checksum.
+        # O ACK ISECMobile continua encapsulado em E9 (02 E9 FE EA).
+        if self.command == ResponseCode.ACK and not self.content:
+            return bytes([ResponseCode.ACK])
+
         # Nº de Bytes = comando (1) + conteúdo (N)
         # Não inclui o próprio byte de tamanho nem o checksum
         size = 1 + len(self.content)  # command + content
@@ -96,6 +101,9 @@ class ISECNetFrame:
         Raises:
             ISECNetError: Se o frame for inválido.
         """
+        if data == bytes([ResponseCode.ACK]):
+            return cls(command=ResponseCode.ACK, content=b"")
+
         if len(data) < 3:
             raise ISECNetError(f"Frame muito curto: {len(data)} bytes (mínimo 3)")
         
@@ -167,7 +175,7 @@ class ISECNetFrame:
         """Cria uma resposta ACK simples (frame curto).
         
         O ACK (0xFE) é enviado diretamente como comando, sem encapsulamento.
-        Usado para responder a comandos como 0x94 e 0xF7.
+        Usado para responder a 0x94, 0xF7 e eventos. build() retorna só FE.
         
         Returns:
             Frame ACK simples.
@@ -221,10 +229,9 @@ class ISECNetFrameReader:
         if len(self._buffer) < 1:
             return False
         
-        # Verifica se é um heartbeat de 1 byte (0xF7)
-        # A central envia apenas o byte F7, sem tamanho nem checksum
-        if self._buffer[0] == ISECNET_COMMAND_HEARTBEAT:
-            frames.append(ISECNetFrame(command=ISECNET_COMMAND_HEARTBEAT, content=bytes()))
+        # Frames curtos de um byte, sem tamanho nem checksum.
+        if self._buffer[0] in (ISECNET_COMMAND_HEARTBEAT, ResponseCode.ACK):
+            frames.append(ISECNetFrame(command=self._buffer[0], content=bytes()))
             self._buffer.pop(0)
             return True
         
@@ -264,4 +271,3 @@ class ISECNetFrameReader:
     def pending_bytes(self) -> int:
         """Retorna o número de bytes pendentes no buffer."""
         return len(self._buffer)
-

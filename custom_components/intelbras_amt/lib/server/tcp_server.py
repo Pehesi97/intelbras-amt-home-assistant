@@ -13,7 +13,7 @@ Características:
 import asyncio
 import logging
 from typing import Callable, Awaitable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from ..const import CommandCode, DEFAULT_PORT, RESPONSE_TIMEOUT
 from ..protocol.isecnet import ISECNetFrame, ISECNetFrameReader
@@ -23,6 +23,9 @@ from .connection_manager import ConnectionManager, AMTConnection
 
 
 logger = logging.getLogger(__name__)
+
+# ISECnet R14, seções 6.3 e 6.4: payloads Contact-ID sem/com calendário.
+_EVENT_CONTENT_LENGTHS = {0xB0: 16, 0xB4: 28}
 
 
 # Tipo para callbacks de frames recebidos
@@ -315,24 +318,34 @@ class AMTServer:
                 for frame in frames:
                     logger.debug(f"Frame recebido de {connection_id}: {frame}")
                     
-                    # Flags para controlar se o frame deve preencher pending_response
-                    is_auto_handled = False
-                    
                     # Trata heartbeat automaticamente se configurado
                     if frame.is_heartbeat and self._config.auto_ack_heartbeat:
                         await self._handle_heartbeat(connection, frame)
-                        is_auto_handled = True
-                        # Continua para notificar callbacks (para contagem, etc)
+                        continue
                     
                     # Trata comando de identificação (0x94) automaticamente
                     if frame.command == CONNECTION_INFO_COMMAND and self._config.auto_ack_connection:
                         await self._handle_connection_info(connection, frame)
-                        is_auto_handled = True
-                        # Continua para notificar callbacks também
+                        continue
+
+                    # Eventos exigem ACK mesmo durante uma consulta. Ainda são
+                    # entregues aos callbacks, sem consumir a resposta pendente.
+                    is_event = frame.command in _EVENT_CONTENT_LENGTHS
+                    if is_event:
+                        if len(frame.content) != _EVENT_CONTENT_LENGTHS[frame.command]:
+                            logger.warning(
+                                "Evento 0x%02X com tamanho inválido: %d",
+                                frame.command,
+                                len(frame.content),
+                            )
+                            continue
+                        connection.writer.write(ISECNetFrame.create_simple_ack().build())
+                        await connection.writer.drain()
+                        logger.debug("ACK para evento 0x%02X: FE", frame.command)
                     
                     # Verifica se há resposta pendente
                     # IMPORTANTE: Heartbeats e comandos auto-tratados NÃO preenchem pending_response
-                    if connection.pending_response and not is_auto_handled:
+                    if connection.pending_response and not is_event:
                         if self._matches_pending_response(connection, frame):
                             logger.debug(
                                 f"Preenchendo resposta pendente de {connection_id} com frame: "
@@ -346,28 +359,26 @@ class AMTServer:
                                 logger.warning(
                                     f"Tentativa de preencher pending_response já concluído para {connection_id}"
                                 )
-                        else:
-                            logger.warning(
-                                "Frame inesperado ignorado enquanto aguardava %s de %s: "
-                                "command=0x%02X, content=%s",
-                                connection.pending_response_kind,
-                                connection_id,
-                                frame.command,
-                                frame.content.hex(' '),
-                            )
-                    elif not is_auto_handled:
-                        # Notifica callbacks de frame (apenas se não foi auto-tratado)
-                        for callback in self._frame_callbacks:
-                            try:
-                                await callback(connection, frame)
-                            except Exception as e:
-                                logger.error(f"Erro em callback de frame: {e}")
+                            continue
+
+                    # Frames não relacionados à consulta também chegam ao HA.
+                    for callback in self._frame_callbacks:
+                        try:
+                            await callback(connection, frame)
+                        except Exception as e:
+                            logger.error(f"Erro em callback de frame: {e}")
         
         except asyncio.CancelledError:
             pass
         except Exception as e:
             logger.error(f"Erro na conexão {connection_id}: {e}")
         finally:
+            if connection._heartbeat_task is not None:
+                connection._heartbeat_task.cancel()
+                await asyncio.gather(connection._heartbeat_task, return_exceptions=True)
+                connection._heartbeat_task = None
+            if connection.pending_response and not connection.pending_response.done():
+                connection.pending_response.set_exception(ConnectionError("Central desconectada"))
             # Cleanup
             self._connection_manager.remove(connection_id)
             
@@ -410,7 +421,13 @@ class AMTServer:
         # Atualiza timestamp do último heartbeat
         connection.metadata["last_heartbeat"] = asyncio.get_event_loop().time()
         
-        # Notifica callbacks de heartbeat
+        # O callback pode consultar a central: não pode ocupar o leitor que
+        # recebe a resposta. Coalesce rajadas enquanto o refresh está em curso.
+        if connection._heartbeat_task is None or connection._heartbeat_task.done():
+            connection._heartbeat_task = asyncio.create_task(self._notify_heartbeat(connection))
+
+    async def _notify_heartbeat(self, connection: AMTConnection) -> None:
+        """Notifica consumidores sem bloquear o recebimento de eventos/respostas."""
         for callback in self._heartbeat_callbacks:
             try:
                 await callback(connection)
@@ -492,6 +509,9 @@ class AMTServer:
         if expected in (None, "any"):
             return True
 
+        if not frame.is_mobile_command:
+            return False
+
         response = Response.from_isecnet_frame(frame)
         if expected == "ack":
             return response.response_type in (ResponseType.ACK, ResponseType.NACK)
@@ -530,30 +550,31 @@ class AMTServer:
         """
         async with connection._command_lock:
             data = frame.build()
-            
+            response_future = None
+
             if wait_response:
-                # Prepara para aguardar resposta
-                connection.pending_response = asyncio.get_event_loop().create_future()
+                # Guarda referência local: o leitor pode resolver e limpar
+                # pending_response enquanto drain() ainda está aguardando.
+                response_future = asyncio.get_running_loop().create_future()
+                connection.pending_response = response_future
                 connection.pending_response_kind = self._expected_response_kind(frame)
                 logger.debug(
                     f"Criado pending_response para {connection.id}, "
                     f"aguardando {connection.pending_response_kind}..."
                 )
             
-            # Envia dados
-            connection.writer.write(data)
-            await connection.writer.drain()
-            
-            logger.debug(f"Enviado para {connection.id}: {data.hex(' ')}")
-            
-            if not wait_response:
-                return None
-            
-            # Aguarda resposta com timeout
             try:
+                connection.writer.write(data)
+                await connection.writer.drain()
+                # O frame inclui a senha; não registrar os bytes enviados.
+                logger.debug("Comando enviado para %s", connection.id)
+
+                if response_future is None:
+                    return None
+
                 logger.debug(f"Aguardando resposta de {connection.id} (timeout: {self._config.response_timeout}s)...")
                 response_frame = await asyncio.wait_for(
-                    connection.pending_response,
+                    response_future,
                     timeout=self._config.response_timeout,
                 )
                 logger.debug(f"Resposta recebida de {connection.id}: {response_frame}")
@@ -564,12 +585,21 @@ class AMTServer:
                     f"({self._config.response_timeout}s). "
                     f"pending_response ainda existe: {connection.pending_response is not None}"
                 )
-                connection.pending_response = None
-                connection.pending_response_kind = None
                 raise TimeoutError(
                     f"Timeout aguardando resposta de {connection.id} "
                     f"({self._config.response_timeout}s)"
                 )
+            finally:
+                if response_future is not None:
+                    if not response_future.done():
+                        response_future.cancel()
+                    elif not response_future.cancelled():
+                        # Recupera também exceções recebidas durante um drain
+                        # que falhou ou foi cancelado antes do await da resposta.
+                        response_future.exception()
+                    if connection.pending_response is response_future:
+                        connection.pending_response = None
+                        connection.pending_response_kind = None
 
     async def __aenter__(self) -> "AMTServer":
         """Context manager: inicia servidor."""

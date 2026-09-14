@@ -32,6 +32,7 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
     Detecta automaticamente o modelo da central e usa o comando apropriado:
     - AMT 2018 E/EG (0x1E): Comando 0x5A (status parcial, 43 bytes)
     - AMT 2018 E SMART (0x34): Comando 0x5A (status parcial, 43 bytes)
+    - AMT 1000 Smart (0x36): Comando 0x5A (status parcial, 43 bytes)
     - AMT 4010 (0x41): Comando 0x5B (status completo, 54 bytes)
     
     Suporta refresh imediato ao receber heartbeat da central,
@@ -116,7 +117,11 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
                 return await self._detect_and_fetch_status()
             
             # Modelo já detectado, usa o comando apropriado
-            if self._detected_model in (CentralModel.AMT_2018_E, CentralModel.AMT_2018_E_SMART):
+            if self._detected_model in (
+                CentralModel.AMT_2018_E,
+                CentralModel.AMT_2018_E_SMART,
+                CentralModel.AMT_1000_SMART,
+            ):
                 return await self._fetch_partial_status()
             elif self._detected_model == CentralModel.AMT_4010:
                 return await self._fetch_full_status()
@@ -200,4 +205,3 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
             raise UpdateFailed("Não foi possível parsear status completo")
         else:
             raise UpdateFailed(f"Erro ao buscar status completo: {response.message}")
-

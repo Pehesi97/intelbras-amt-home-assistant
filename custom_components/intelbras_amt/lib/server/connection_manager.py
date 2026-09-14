@@ -38,6 +38,8 @@ class AMTConnection:
     metadata: dict[str, Any] = field(default_factory=dict)
     _command_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     """Lock para serializar envio de comandos. Garante que apenas um comando aguarda resposta por vez."""
+    _heartbeat_task: asyncio.Task | None = None
+    """Uma notificação de heartbeat por conexão, fora do leitor TCP."""
 
     @property
     def host(self) -> str:

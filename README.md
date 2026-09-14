@@ -141,7 +141,7 @@ A integração expõe as seguintes entidades no Home Assistant:
 2. No HACS, vá em **Integrações** → **Menu (⋮)** → **Repositórios Customizados**
 
 3. Adicione este repositório:
-   - **URL**: `https://github.com/pehesi97/intelbras-amt-homeassistant`
+   - **URL**: `https://github.com/Pehesi97/intelbras-amt-home-assistant`
    - **Categoria**: Integração
 
 4. Procure por "Intelbras AMT 2018/4010" no HACS e clique em **Baixar**
@@ -505,3 +505,13 @@ MIT
 - [Home Assistant Developer Docs](https://developers.home-assistant.io/)
 - [HACS](https://hacs.xyz/)
 
+
+
+## Candidata 0.7.4
+
+Atualização de manutenção para as issues 9, 10 e 11, mantendo a estrutura de
+entidades da v0.7.3. Inclui AMT1000 Smart (0x36), mitigação de falso disparo
+com partições e correções de transporte/ACK. Veja [o changelog](CHANGELOG.md)
+para detalhes e limites de validação. A mitigação não associa zonas a partições
+e pode não reconhecer pânico silencioso sem zona. B0/B4 foram validados em
+simulador; não foram observados na sessão física.

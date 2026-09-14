@@ -258,6 +258,9 @@ class CentralModel(IntEnum):
     AMT_2018_E_SMART = 0x34
     """AMT 2018 E SMART - Central de alarme monitorada."""
 
+    AMT_1000_SMART = 0x36
+    """AMT 1000 Smart - Status parcial confirmado na issue #9."""
+
     AMT_4010 = 0x41
     """AMT 4010 - Central de alarme monitorada."""
 
@@ -274,6 +277,7 @@ class CentralModel(IntEnum):
         model_names = {
             cls.AMT_2018_E: "AMT 2018 E/EG",
             cls.AMT_2018_E_SMART: "AMT 2018 E SMART",
+            cls.AMT_1000_SMART: "AMT 1000 Smart",
             cls.AMT_4010: "AMT 4010",
         }
         return model_names.get(model_code, f"0x{model_code:02X}")
