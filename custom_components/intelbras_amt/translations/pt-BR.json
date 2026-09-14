@@ -12,14 +12,46 @@
         "data_description": {
           "port": "Porta onde o servidor irá escutar (padrão: 9009)",
           "password": "Senha configurada na central para comandos remotos",
-          "update_interval": "Intervalo base de polling do status (1-60 segundos, padrão: 5). O status também é atualizado automaticamente a cada heartbeat da central."
+          "update_interval": "Intervalo base de polling do status (1-60 segundos, padrão: 2). O status também é atualizado automaticamente a cada heartbeat da central."
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigurar conexão da central",
+        "description": "Altere a porta e/ou a senha. Deixe a senha vazia para manter a atual. Ao mudar a porta, ajuste também o destino configurado na central.",
+        "data": {
+          "port": "Porta TCP",
+          "password": "Nova senha (4–6 dígitos)"
+        },
+        "data_description": {
+          "password": "Vazio mantém a senha atual; a senha existente não é exibida."
         }
       }
     },
     "error": {
       "invalid_port": "Porta inválida (1-65535)",
       "invalid_password": "Senha deve ter entre 4 e 6 dígitos",
-      "invalid_update_interval": "Intervalo deve ser entre 1 e 60 segundos"
+      "invalid_update_interval": "Intervalo deve ser entre 1 e 60 segundos",
+      "port_in_use": "Outra entrada desta integração já utiliza esta porta."
+    },
+    "abort": {
+      "already_configured": "Esta porta já está configurada.",
+      "reconfigure_successful": "Configuração atualizada."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opções da integração",
+        "description": "Escolha as zonas e PGMs que deseja utilizar. Retirar da seleção desabilita as entidades, preservando seus IDs e personalizações. Deixe a lista vazia para desabilitar todas daquela categoria.",
+        "data": {
+          "update_interval": "Intervalo de atualização (segundos)",
+          "zones": "Zonas exibidas",
+          "pgms": "PGMs exibidas"
+        }
+      }
+    },
+    "error": {
+      "invalid_options": "Selecione valores válidos e um intervalo entre 1 e 60 segundos."
     }
   }
 }

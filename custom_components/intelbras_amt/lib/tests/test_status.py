@@ -93,3 +93,12 @@ def test_silent_alarm_persists_after_open_flag_clears_and_disarm(raw, armed, ope
     assert not status.siren_on
     assert status.zones.open_zones == open_zones
     assert status.zones.violated_zones == {25}
+
+
+def test_partial_tamper_and_short_second_bytes_start_at_zone_11():
+    """ISECMobile R15 Status34-37: zones 1-8 and 11-18, no 9/10."""
+    raw = bytearray(43)
+    raw[33:37] = bytes([0x81, 0x81, 0x42, 0x42])
+    status = PartialCentralStatus.parse(raw)
+    assert status.zones.tamper_zones == {1, 8, 11, 18}
+    assert status.zones.short_circuit_zones == {2, 7, 12, 17}

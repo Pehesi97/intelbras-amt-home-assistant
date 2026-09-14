@@ -29,6 +29,9 @@ if _HAS_HOMEASSISTANT:
 
     from .const import DOMAIN, CONF_PORT, CONF_PASSWORD, CONF_UPDATE_INTERVAL, DEFAULT_PORT, DEFAULT_UPDATE_INTERVAL
     from .coordinator import AMTCoordinator
+    from .entity_selection import async_apply_entity_selection
+    from homeassistant.helpers.update_coordinator import UpdateFailed
+    from homeassistant.exceptions import ConfigEntryNotReady
 
     _LOGGER = logging.getLogger(__name__)
 
@@ -58,7 +61,7 @@ if _HAS_HOMEASSISTANT:
         
         port = entry.data.get(CONF_PORT, DEFAULT_PORT)
         password = entry.data.get(CONF_PASSWORD, "")
-        update_interval = entry.data.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+        update_interval = entry.options.get(CONF_UPDATE_INTERVAL, entry.data.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL))
         
         # Cria configuração do servidor
         config = AMTServerConfig(
@@ -80,6 +83,8 @@ if _HAS_HOMEASSISTANT:
             update_interval=update_interval,
         )
         
+        coordinator.async_set_update_error(UpdateFailed("Aguardando conexão da central"))
+
         # Callbacks para eventos
         @server.on_connect
         async def on_central_connect(conn):
@@ -92,6 +97,8 @@ if _HAS_HOMEASSISTANT:
             
             # Atualiza o coordinator com a nova conexão
             coordinator.connection_id = conn.id
+            coordinator.async_set_update_error(UpdateFailed("Aguardando status da central"))
+            hass.async_create_task(coordinator.async_request_refresh())
             
             # Dispara evento no HA
             hass.bus.async_fire(f"{DOMAIN}_connected", {"connection_id": conn.id})
@@ -99,6 +106,8 @@ if _HAS_HOMEASSISTANT:
         @server.on_disconnect
         async def on_central_disconnect(conn):
             """Chamado quando uma central desconecta."""
+            if coordinator.connection_id != conn.id:
+                return
             _LOGGER.warning(f"Central AMT desconectada: {conn.id}")
             entry_data = hass.data[DOMAIN][entry.entry_id]
             entry_data["connected"] = False
@@ -106,6 +115,7 @@ if _HAS_HOMEASSISTANT:
             
             # Atualiza o coordinator
             coordinator.connection_id = None
+            coordinator.async_set_update_error(UpdateFailed("Central desconectada"))
             
             # Dispara evento no HA
             hass.bus.async_fire(f"{DOMAIN}_disconnected", {"connection_id": conn.id})
@@ -113,6 +123,8 @@ if _HAS_HOMEASSISTANT:
         @server.on_frame
         async def on_frame_received(conn, frame: ISECNetFrame):
             """Chamado quando um frame é recebido (exceto heartbeat)."""
+            if conn.id != coordinator.connection_id:
+                return
             if frame.is_mobile_command and len(frame.content) in (43, 54):
                 status = (
                     CentralStatus.try_parse(frame.content)
@@ -164,9 +176,15 @@ if _HAS_HOMEASSISTANT:
         }
         
         # Inicia o servidor em background
-        await server.start()
+        try:
+            await server.start()
+        except OSError as err:
+            hass.data[DOMAIN].pop(entry.entry_id, None)
+            raise ConfigEntryNotReady(f"Não foi possível escutar na porta TCP {port}") from err
         _LOGGER.info(f"Servidor AMT iniciado na porta {port}")
         
+        async_apply_entity_selection(hass, entry)
+
         # Configura as plataformas (alarm_control_panel, binary_sensor, switch, sensor)
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
         

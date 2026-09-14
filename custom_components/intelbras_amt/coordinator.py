@@ -2,7 +2,7 @@
 
 import logging
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -63,6 +63,7 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
             _LOGGER,
             name=f"Intelbras AMT ({entry_id})",
             update_interval=timedelta(seconds=update_interval),
+            config_entry=hass.config_entries.async_get_entry(entry_id),
         )
         self.server = server
         self.connection_id = connection_id
@@ -70,6 +71,10 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
         self.entry_id = entry_id
         self._detected_model: int | None = None
         """Modelo detectado da central (0x1E = AMT 2018 E/EG, 0x34 = AMT 2018 E SMART, 0x41 = AMT 4010)."""
+        self.last_successful_poll: datetime | None = None
+        self.successful_polls = 0
+        self.failed_polls = 0
+        self.last_error_type: str | None = None
         self._last_heartbeat_refresh: float = 0.0
         """Timestamp do último refresh disparado por heartbeat (monotonic)."""
 
@@ -101,37 +106,49 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
         Detecta automaticamente o modelo no primeiro request e usa o comando apropriado.
         
         Returns:
-            Status da central (parcial ou completo) ou None se não conectada.
+            Status válido da central (parcial ou completo).
             
         Raises:
             UpdateFailed: Se houver erro ao buscar status.
         """
         if not self.connection_id:
             _LOGGER.debug("Central não conectada, não é possível atualizar status")
-            return None
-        
+            raise UpdateFailed("Central desconectada")
+
+        connection_id = self.connection_id
         try:
             # Se ainda não detectamos o modelo, tenta 0x5A primeiro (AMT 2018 E/EG/E SMART)
             if self._detected_model is None:
                 _LOGGER.info("Detectando modelo da central automaticamente...")
-                return await self._detect_and_fetch_status()
+                status = await self._detect_and_fetch_status()
             
             # Modelo já detectado, usa o comando apropriado
-            if self._detected_model in (
+            elif self._detected_model in (
                 CentralModel.AMT_2018_E,
                 CentralModel.AMT_2018_E_SMART,
                 CentralModel.AMT_1000_SMART,
             ):
-                return await self._fetch_partial_status()
+                status = await self._fetch_partial_status()
             elif self._detected_model == CentralModel.AMT_4010:
-                return await self._fetch_full_status()
+                status = await self._fetch_full_status()
             else:
                 _LOGGER.warning(f"Modelo desconhecido (0x{self._detected_model:02X}), tentando status parcial")
-                return await self._fetch_partial_status()
+                status = await self._fetch_partial_status()
                 
+            if self.connection_id != connection_id:
+                raise UpdateFailed("Conexão substituída durante a consulta")
+            self.last_successful_poll = datetime.now(timezone.utc)
+            self.successful_polls += 1
+            self.last_error_type = None
+            return status
+
         except TimeoutError as err:
+            self.failed_polls += 1
+            self.last_error_type = type(err).__name__
             raise UpdateFailed(f"Timeout aguardando resposta: {err}")
         except Exception as err:
+            self.failed_polls += 1
+            self.last_error_type = type(err).__name__
             raise UpdateFailed(f"Erro ao atualizar status: {err}")
     
     async def _detect_and_fetch_status(self) -> PartialCentralStatus | CentralStatus | None:

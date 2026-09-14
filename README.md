@@ -5,6 +5,7 @@ Integração para Home Assistant que permite controlar centrais de alarme Intelb
 ## Modelos Suportados
 
 - ✅ **AMT 2018 E/EG/E SMART** - Detecção automática (comando 0x5A)
+- ✅ **AMT 1000 Smart** - Modelo 0x36, status parcial (comando 0x5A)
 - ✅ **AMT 4010** - Detecção automática (comando 0x5B)
 
 A integração **detecta automaticamente** o modelo da central e usa o comando apropriado!
@@ -36,6 +37,10 @@ A central Intelbras AMT **conecta ativamente** ao servidor TCP do Home Assistant
 2. Aceita conexão da central
 3. Responde automaticamente aos heartbeats (keep-alive)
 4. Envia comandos quando você arma/desarma pelo HA
+5. Confirma eventos Contact-ID `0xB0` e `0xB4` com o ACK curto `FE`, inclusive durante consultas de status
+
+A revisão do SDK, as divergências encontradas e o roteiro de validação das issues
+9, 10 e 11 estão em [docs/protocol-review.md](docs/protocol-review.md).
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -96,6 +101,15 @@ A integração expõe as seguintes entidades no Home Assistant:
 #### Alarm Control Panel
 - **Alarme** - Controle principal do alarme (armar/desarmar, modo away/home)
 
+Com partições habilitadas, o bit global de disparo junto do arme global exige
+também uma zona violada para confirmar `TRIGGERED`. Isso reduz os falsos da
+[#10](https://github.com/Pehesi97/intelbras-amt-home-assistant/issues/10), em que
+abrir uma zona de uma partição desarmada era confundido com disparo. Os caminhos
+de detecção pela sirene e o comportamento sem partições permanecem iguais.
+O filtro não associa zonas a partições nem distingue memória antiga de violação
+atual; pânico silencioso sem zona associada pode não ser reconhecido em centrais
+particionadas. Veja os [testes e limites da mitigação](docs/protocol-review.md).
+
 #### Switches
 - **Armar Alarme** - Switch para armar/desarmar todas as áreas
 - **Sirene** - Switch para ligar/desligar a sirene
@@ -113,14 +127,17 @@ A integração expõe as seguintes entidades no Home Assistant:
 - **Armada** - Status de armamento geral
 
 #### Binary Sensors
-- **Zonas (1-48)** - Binary sensors para cada zona:
-  - Zona aberta
-  - Zona violada
-  - Zona em bypass
-- **Zonas (1-18)** - Binary sensors adicionais:
-  - Tamper
-  - Curto-circuito
-- **Zonas (1-40)** - Bateria baixa (sensores sem fio)
+- **Zona NN** - Sensor principal de abertura por zona (48 na AMT2018; 64 na AMT4010),
+  com atributos `violada`, `bypass`, `bateria_baixa`, `tamper` e `curto_circuito`.
+  Dados não representados no status recebido aparecem como `null`; bateria é
+  um alerta de carga baixa, não uma porcentagem.
+- **Zona NN - Problema** - Agrupa bateria baixa, tamper e curto. Expõe os
+  atributos da zona e indica problema se algum desses alertas for verdadeiro.
+  Sem nenhum diagnóstico disponível, fica desconhecido. Bypass e memória de
+  violação não acionam esse estado.
+- **Migração na major:** as antigas entidades auxiliares de zona são removidas.
+  Automações e dashboards devem usar os atributos do sensor principal.
+  Veja [onde visualizar os atributos e como migrar](docs/zone-attributes.md).
 - **Problemas do Sistema**:
   - Falta de Energia
   - Bateria Baixa
@@ -131,6 +148,13 @@ A integração expõe as seguintes entidades no Home Assistant:
   - Curto Sirene
   - Linha Telefônica Cortada
   - Falha Comunicação
+
+## Reconfiguração e opções da beta
+
+A beta permite alterar porta/senha em **Reconfigurar**, escolher zonas/PGMs e
+intervalo em **Opções**, e **Baixar diagnóstico** na página da integração.
+Sem conexão, as entidades ficam indisponíveis até receber novo status válido.
+Veja [os detalhes e a preservação dos IDs](docs/beta-options.md).
 
 ## Instalação no Home Assistant
 
@@ -504,14 +528,3 @@ MIT
 - Documentação ISECNet/ISECMobile da Intelbras
 - [Home Assistant Developer Docs](https://developers.home-assistant.io/)
 - [HACS](https://hacs.xyz/)
-
-
-
-## Candidata 0.7.4
-
-Atualização de manutenção para as issues 9, 10 e 11, mantendo a estrutura de
-entidades da v0.7.3. Inclui AMT1000 Smart (0x36), mitigação de falso disparo
-com partições e correções de transporte/ACK. Veja [o changelog](CHANGELOG.md)
-para detalhes e limites de validação. A mitigação não associa zonas a partições
-e pode não reconhecer pânico silencioso sem zona. B0/B4 foram validados em
-simulador; não foram observados na sessão física.

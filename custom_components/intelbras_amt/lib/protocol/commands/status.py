@@ -607,25 +607,15 @@ class PartialCentralStatus:
         status.problems.phone_line_cut = bool(data[32] & 0x04)
         status.problems.event_comm_failure = bool(data[32] & 0x08)
         
-        # === Tamper zonas (Status34-35, bytes 33-34) ===
-        # Zonas 1-18
-        tamper_data = data[33:35]
-        for byte_idx, byte_val in enumerate(tamper_data):
-            for bit_idx in range(8):
-                if byte_val & (1 << bit_idx):
-                    zone_num = 1 + (byte_idx * 8) + bit_idx
-                    if zone_num <= 18:
-                        status.zones.tamper_zones.add(zone_num)
-        
-        # === Curto-circuito zonas (Status36-37, bytes 35-36) ===
-        # Zonas 1-18
-        short_data = data[35:37]
-        for byte_idx, byte_val in enumerate(short_data):
-            for bit_idx in range(8):
-                if byte_val & (1 << bit_idx):
-                    zone_num = 1 + (byte_idx * 8) + bit_idx
-                    if zone_num <= 18:
-                        status.zones.short_circuit_zones.add(zone_num)
+        # ISECMobile R15: cada segundo byte cobre zonas 11-18, não 9-16.
+        status.zones.tamper_zones = (
+            ZoneStatus._parse_bitmask(data[33:34], start_zone=1)
+            | ZoneStatus._parse_bitmask(data[34:35], start_zone=11)
+        )
+        status.zones.short_circuit_zones = (
+            ZoneStatus._parse_bitmask(data[35:36], start_zone=1)
+            | ZoneStatus._parse_bitmask(data[36:37], start_zone=11)
+        )
         
         # === Status sirene e PGMs 1-2 (Status38, byte 37) ===
         # Status38 tem informação mais específica sobre sirene e PGMs

@@ -10,6 +10,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import AMTCoordinator
 from .const import DOMAIN
+from .entity_selection import selected_numbers
 
 # Importa da biblioteca local
 from .lib.server import AMTServer
@@ -38,7 +39,7 @@ async def async_setup_entry(
     entities.append(AMTSirenSwitch(coordinator, entry, server, password))
     
     # Switches para PGMs (1-19)
-    for pgm_num in range(1, 20):
+    for pgm_num in selected_numbers(entry, "pgms", 19):
         entities.append(AMTPGMSwitch(coordinator, entry, server, password, pgm_num))
     
     # Switches para armar/desarmar partições

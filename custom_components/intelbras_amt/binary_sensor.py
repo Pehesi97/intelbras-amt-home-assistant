@@ -9,11 +9,13 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity_registry import async_get, async_entries_for_config_entry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import AMTCoordinator
 from .const import DOMAIN
+from .entity_selection import selected_numbers
 from .lib.const import CentralModel
 
 _LOGGER = logging.getLogger(__name__)
@@ -26,6 +28,18 @@ async def async_setup_entry(
 ) -> None:
     """Configura os binary sensors."""
     coordinator: AMTCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+
+    # Migração da major: remove apenas os IDs auxiliares conhecidos desta entrada.
+    registry = async_get(hass)
+    legacy_ids = {
+        f"{entry.entry_id}_zona_{zone:02d}_{kind}"
+        for zone in range(1, 65)
+        for kind in ("violada", "bypass", "bateria_baixa", "tamper", "curto_circuito")
+    }
+    for entity in async_entries_for_config_entry(registry, entry.entry_id):
+        if (entity.domain == "binary_sensor" and entity.platform == DOMAIN
+                and entity.unique_id in legacy_ids):
+            registry.async_remove(entity.entity_id)
 
     # Sensores de problemas do sistema são independentes do modelo — adiciona imediatamente
     async_add_entities([
@@ -50,32 +64,17 @@ async def async_setup_entry(
             return
         _zones_registered = True
 
-        if coordinator._detected_model == CentralModel.AMT_4010:
-            max_zones = 64
-            max_low_batt = 64
-        else:
-            # AMT 2018 E/EG/E SMART
-            max_zones = 48
-            max_low_batt = 40
-
-        zone_entities: list[BinarySensorEntity] = []
-
-        for zone_num in range(1, max_zones + 1):
-            zone_entities.append(AMTZoneBinarySensor(coordinator, entry, zone_num, "aberta"))
-            zone_entities.append(AMTZoneBinarySensor(coordinator, entry, zone_num, "violada"))
-            zone_entities.append(AMTZoneBinarySensor(coordinator, entry, zone_num, "bypass"))
-
-        for zone_num in range(1, 19):
-            zone_entities.append(AMTZoneBinarySensor(coordinator, entry, zone_num, "tamper"))
-            zone_entities.append(AMTZoneBinarySensor(coordinator, entry, zone_num, "curto_circuito"))
-
-        for zone_num in range(1, max_low_batt + 1):
-            zone_entities.append(AMTZoneBinarySensor(coordinator, entry, zone_num, "bateria_baixa"))
+        max_zones = 64 if coordinator._detected_model == CentralModel.AMT_4010 else 48
+        zone_entities = [
+            entity_class(coordinator, entry, zone_num)
+            for zone_num in selected_numbers(entry, "zones", max_zones)
+            for entity_class in (AMTZoneBinarySensor, AMTZoneProblemBinarySensor)
+        ]
 
         _LOGGER.info(
-            "Modelo %s detectado: registrando %d zonas",
+            "Modelo %s detectado: registrando %d zonas selecionadas",
             CentralModel.get_name(coordinator._detected_model),
-            max_zones,
+            len(zone_entities) // 2,
         )
         async_add_entities(zone_entities)
 
@@ -91,51 +90,21 @@ class AMTZoneBinarySensor(CoordinatorEntity[AMTCoordinator], BinarySensorEntity)
     """Binary sensor para uma zona específica."""
     
     _attr_has_entity_name = True
-    
+    _attr_device_class = BinarySensorDeviceClass.DOOR
+
     def __init__(
         self,
         coordinator: AMTCoordinator,
         entry: ConfigEntry,
         zone_number: int,
-        zone_type: str,
     ) -> None:
-        """Inicializa o binary sensor de zona.
-        
-        Args:
-            coordinator: Coordinator do status.
-            entry: Config entry.
-            zone_number: Número da zona (1-64).
-            zone_type: Tipo de status ('aberta', 'violada', 'bypass', 'tamper', 'curto_circuito', 'bateria_baixa').
-        """
+        """Mantém o identificador do sensor de abertura já cadastrado."""
         super().__init__(coordinator)
         self.zone_number = zone_number
-        self.zone_type = zone_type
         self._entry = entry
-        
-        # Define unique_id e name
-        self._attr_unique_id = f"{entry.entry_id}_zona_{zone_number:02d}_{zone_type}"
-        
-        # Nome baseado no tipo
-        type_names = {
-            "aberta": "Aberta",
-            "violada": "Violada",
-            "bypass": "Em Bypass",
-            "tamper": "Tamper",
-            "curto_circuito": "Curto-Circuito",
-            "bateria_baixa": "Bateria Baixa",
-        }
-        self._attr_name = f"Zona {zone_number:02d} - {type_names.get(zone_type, zone_type.title())}"
-        
-        # Device class apropriado
-        if zone_type == "aberta":
-            self._attr_device_class = BinarySensorDeviceClass.DOOR
-        elif zone_type == "violada":
-            self._attr_device_class = BinarySensorDeviceClass.PROBLEM
-        elif zone_type in ("tamper", "curto_circuito", "bateria_baixa"):
-            self._attr_device_class = BinarySensorDeviceClass.PROBLEM
-        else:
-            self._attr_device_class = None
-    
+        self._attr_unique_id = f"{entry.entry_id}_zona_{zone_number:02d}_aberta"
+        self._attr_name = f"Zona {zone_number:02d}"
+
     @property
     def device_info(self):
         """Informações do dispositivo."""
@@ -152,30 +121,66 @@ class AMTZoneBinarySensor(CoordinatorEntity[AMTCoordinator], BinarySensorEntity)
         if not self.coordinator.data:
             return False
         
-        status = self.coordinator.data
-        
-        if self.zone_type == "aberta":
-            return self.zone_number in status.zones.open_zones
-        elif self.zone_type == "violada":
-            return self.zone_number in status.zones.violated_zones
-        elif self.zone_type == "bypass":
-            return self.zone_number in status.zones.bypassed_zones
-        elif self.zone_type == "tamper":
-            return self.zone_number in status.zones.tamper_zones
-        elif self.zone_type == "curto_circuito":
-            return self.zone_number in status.zones.short_circuit_zones
-        elif self.zone_type == "bateria_baixa":
-            return self.zone_number in status.zones.low_battery_zones
-        
-        return False
-    
+        return self.zone_number in self.coordinator.data.zones.open_zones
+
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Atributos extras."""
-        return {
+        """Detalhes reportados pela central para esta zona."""
+        attrs = {
             "zone_number": self.zone_number,
-            "zone_type": self.zone_type,
+            "zone_type": "aberta",
         }
+
+        attrs.update(
+            violada=None, bypass=None, bateria_baixa=None,
+            tamper=None, curto_circuito=None,
+        )
+        status = self.coordinator.data
+        if status is None:
+            return attrs
+
+        size = len(status.raw_data)
+        if size not in (43, 54):
+            return attrs
+
+        zone = self.zone_number
+        zones = status.zones
+        if 1 <= zone <= (48 if size == 43 else 64):
+            attrs["violada"] = zone in zones.violated_zones
+            attrs["bypass"] = zone in zones.bypassed_zones
+        if (size == 43 and 1 <= zone <= 40) or (size == 54 and 17 <= zone <= 64):
+            attrs["bateria_baixa"] = zone in zones.low_battery_zones
+        if 1 <= zone <= 8 or (size == 43 and 11 <= zone <= 18):
+            attrs["tamper"] = zone in zones.tamper_zones
+            attrs["curto_circuito"] = zone in zones.short_circuit_zones
+        return attrs
+
+
+class AMTZoneProblemBinarySensor(AMTZoneBinarySensor):
+    """Agrupa falhas da zona sem confundir abertura ou memória com defeito."""
+
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+
+    def __init__(
+        self, coordinator: AMTCoordinator, entry: ConfigEntry, zone_number: int,
+    ) -> None:
+        super().__init__(coordinator, entry, zone_number)
+        self._attr_unique_id = f"{entry.entry_id}_zona_{zone_number:02d}_problema"
+        self._attr_name = f"Zona {zone_number:02d} - Problema"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {**super().extra_state_attributes, "zone_type": "problema"}
+
+    @property
+    def is_on(self) -> bool | None:
+        """Sem diagnóstico reportado, o estado é desconhecido; não presume OK."""
+        attrs = self.extra_state_attributes
+        reported = [
+            attrs[key] for key in ("bateria_baixa", "tamper", "curto_circuito")
+            if attrs[key] is not None
+        ]
+        return any(reported) if reported else None
 
 
 class AMTProblemBinarySensor(CoordinatorEntity[AMTCoordinator], BinarySensorEntity):
@@ -243,4 +248,3 @@ class AMTProblemBinarySensor(CoordinatorEntity[AMTCoordinator], BinarySensorEnti
             return problems.event_comm_failure
         
         return False
-

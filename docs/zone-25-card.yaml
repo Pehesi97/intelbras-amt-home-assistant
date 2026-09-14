@@ -1,0 +1,29 @@
+# Dashboard → Editar → Adicionar cartão → Manual.
+# Ajuste o entity_id se o seu sensor tiver outro ID.
+type: entities
+title: Zona 25
+entities:
+  - entity: binary_sensor.intelbras_amt_2018_4010_zona_25_aberta
+    name: Abertura
+  - entity: binary_sensor.quarto_visitas_intelbras_amt_2018_4010_zona_25_problema
+    name: Problema
+  - type: attribute
+    entity: binary_sensor.quarto_visitas_intelbras_amt_2018_4010_zona_25_problema
+    attribute: violada
+    name: Violada / memória
+  - type: attribute
+    entity: binary_sensor.quarto_visitas_intelbras_amt_2018_4010_zona_25_problema
+    attribute: bypass
+    name: Em bypass
+  - type: attribute
+    entity: binary_sensor.quarto_visitas_intelbras_amt_2018_4010_zona_25_problema
+    attribute: bateria_baixa
+    name: Bateria baixa
+  - type: attribute
+    entity: binary_sensor.quarto_visitas_intelbras_amt_2018_4010_zona_25_problema
+    attribute: tamper
+    name: Tamper
+  - type: attribute
+    entity: binary_sensor.quarto_visitas_intelbras_amt_2018_4010_zona_25_problema
+    attribute: curto_circuito
+    name: Curto-circuito

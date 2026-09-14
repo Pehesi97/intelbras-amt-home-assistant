@@ -1,6 +1,68 @@
 # Changelog
 
-## 0.7.4 — 2026-09-14
+## 1.0.0b4 — candidata major, não publicada
+
+Inclui os fixes da 0.7.4 e reorganiza as informações de zona. Esta beta separa
+as mudanças de apresentação/entidades da atualização de manutenção.
+
+### Melhorias da beta 4
+
+- Entidades ficam indisponíveis durante desconexão e até o primeiro status válido;
+  respostas e desconexões de conexões antigas não alteram a conexão atual.
+- Reconfiguração nativa de porta/senha preserva a entrada e seus IDs. Senha vazia
+  mantém a anterior. Porta ocupada é tratada como falha com nova tentativa.
+- Opções nativas para intervalo de atualização e seleção de zonas/PGMs. A seleção
+  desabilita sem apagar registros e respeita desabilitações manuais.
+- Diagnóstico para download com campos explícitos, sem credenciais, endereços ou
+  frames brutos. Inclui horário e contadores de consultas válidas/falhas.
+- 92 testes locais; fluxos, seleção e disponibilidade validados também com classes
+  reais do HA. Veja [uso e validação](docs/beta-options.md).
+
+### Breaking changes e migração
+
+- **Nome do sensor principal:** `Zona NN - Aberta` passa a `Zona NN`. O estado
+  de abertura continua separado do nome. `unique_id` é preservado, portanto o
+  `entity_id` de uma entidade já registrada permanece. Nomes personalizados
+  pelo usuário prevalecem. Em uma instalação nova, IDs gerados automaticamente
+  podem diferir dos IDs antigos com sufixo `_aberta`. Templates que procuram
+  entidades pelo nome visível devem ser revistos.
+- **Remoção das auxiliares:** violação, bypass, bateria baixa, tamper e curto
+  deixam de ser entidades separadas. A atualização remove seus registros,
+  inclusive os desabilitados, pela API nativa do HA. Ajuste dashboards e
+  automações para os atributos do sensor principal antes de atualizar.
+  Esta mudança substitui a estratégia da beta 1 de manter auxiliares desabilitadas.
+- **Atributos novos no principal:** `violada`, `bypass`, `bateria_baixa`,
+  `tamper` e `curto_circuito`. `null` significa informação indisponível; `false`
+  significa que o status não indica o alerta. Bateria não é porcentagem.
+  Gatilhos genéricos de estado sem `from`/`to` podem reagir a mudanças dos novos
+  atributos mesmo sem mudança de abertura. Para observar abertura use
+  `to: "on"`; para bateria, observe `attribute: bateria_baixa` explicitamente.
+- **Tamper/curto no status parcial:** o segundo byte passa a mapear zonas 11–18,
+  conforme ISECMobile R15, em vez de 9–16. IDs não mudam, mas a associação do
+  alerta à zona é corrigida. Remova eventuais compensações feitas em automações.
+
+### Entidade agrupada de problema (beta 3)
+
+- Adicionada `Zona NN - Problema` para cada zona, com os cinco atributos de diagnóstico.
+- Estado ligado se bateria baixa, tamper ou curto estiver verdadeiro. Bypass e
+  memória de violação não indicam defeito e não acionam esse estado.
+- Sem nenhum diagnóstico reportado, o estado é desconhecido. Havendo dados,
+  o estado resume somente os diagnósticos disponíveis; os demais continuam `null`.
+- Abertura mantém ID, estado e atributos. Duas entidades por zona, sem recriar
+  as antigas auxiliares individuais.
+
+### Preservado
+
+- Estado principal de abertura, IDs e configurações dos sensores principais.
+- Comandos de arme/desarme, sirene, PGM, partições e entidades globais.
+- Configurações de todas as entidades que permanecem; sem alteração de `disabled_by`.
+
+Veja [a migração por atributos](docs/zone-attributes.md). Faça backup antes de
+instalar. Para voltar com as personalizações das auxiliares, restaure o backup
+completo (incluindo o registro de entidades) com o HA parado. Reinstalar apenas
+a versão antiga pode não recuperar essas personalizações.
+
+## 0.7.4 — publicada em 2026-09-14
 
 Base: v0.7.3. Mantém nomes, IDs, atributos, classes e defaults de habilitação
 das entidades, além do parser de zonas usado pela v0.7.3.
@@ -21,7 +83,7 @@ das entidades, além do parser de zonas usado pela v0.7.3.
   a recepção; limpeza de consultas em timeout, cancelamento e desconexão; correção
   da resposta que chega durante o envio. Senha removida do log bruto de envio.
 
-### Limites conhecidos
+### Limites conhecidos das duas candidatas
 
 - A mitigação #10 não associa zonas a partições nem distingue memória antiga
   de uma violação atual. Pânico silencioso sem zona ou sirene pode não ser
@@ -34,11 +96,47 @@ das entidades, além do parser de zonas usado pela v0.7.3.
   isso não prova a causa específica da interrupção do Cloud na #11.
 - Não houve validação física em AMT1000, AMT4010 ou com partições habilitadas.
 
-Esta versão preserva a estrutura de entidades da v0.7.3.
+A v0.7.4 foi publicada como release estável. A validação da estrutura antiga
+na 0.7.4 e da apresentação nova na major é feita separadamente.
 
+## Validação das candidatas — 14/09/2026
 
-### Validação 0.7.4
+- **0.7.4:** 56 testes passaram em uma cópia isolada da fonte. O código de
+  entidades de zona e o parser de status foram comparados byte a byte com
+  v0.7.3; os nomes, atributos e defaults anteriores foram mantidos.
+- **1.0.0b1:** 77 testes passaram em outra cópia isolada. Instalada no HA
+  Container 2026.8.1 após backup; imports/propriedades também verificados com
+  as classes reais dessa versão do HA.
+- Após reinício, HTTP 200 e central reconectada. Registro preservou os 263
+  IDs e as 19 entidades desabilitadas, além dos nomes personalizados. O sensor
+  existente da zona 25 manteve seu ID, passou a mostrar `Zona 25` e os cinco
+  atributos. O painel permaneceu desarmado. Arquivos instalados conferidos por hash.
+- Este teste de atualização não inclui um novo disparo, teste de partições ou
+  bateria fisicamente baixa. Os limites de hardware descritos acima continuam.
 
-56 testes passaram na fonte isolada. Entidades de zona e parser de status
-comparados byte a byte com v0.7.3. A instalação física da sessão correspondeu
-à candidata major; a 0.7.4 foi validada separadamente em testes locais.
+### Atualização para 1.0.0b2
+
+- 77 testes passaram também na fonte isolada da beta 2.
+- Instalada no HA 2026.8.1 após backup do componente e do registro de entidades.
+- Removidas exatamente 172 auxiliares de zona: a integração passou de 263 para
+  91 entidades. IDs, nomes personalizados e desabilitações das 91 restantes
+  preservados; nenhuma entidade nova foi criada.
+- Registro persistido conferido após o atraso de gravação de inicialização do HA.
+  Os 30 arquivos de runtime instalados conferem com a candidata por SHA-256.
+- Zona 25 mantém os cinco atributos; central conectada, desarmada, sirene desligada.
+- Adicionado exemplo de cartão nativo para visualizar atributos sem novas entidades.
+- A candidata 0.7.4 permanece inalterada. Nenhuma release/tag foi publicada.
+
+### Atualização para 1.0.0b3
+
+- 88 testes passaram na fonte isolada, incluindo falhas independentes da abertura,
+  memória/bypass sem defeito, ausência de diagnóstico e preservação na migração.
+- Instalada no HA 2026.8.1 com backup do componente e registro. Acrescentadas 48
+  entidades de problema; as 91 existentes preservaram IDs e configurações.
+  Total desta instalação: 139 entidades.
+- Zona 25 de problema confirmou estado desligado e cinco atributos; zona 41
+  confirmou estado desconhecido por ausência dos três diagnósticos.
+- Estados on/off/desconhecido também verificados com classes reais do HA e
+  dados sintéticos, sem enviar comandos à central. Não houve teste de falha física.
+- Central reconectada, desarmada, sirene desligada. Arquivos instalados conferidos
+  por SHA-256. A candidata 0.7.4 permanece inalterada; nenhuma release publicada.

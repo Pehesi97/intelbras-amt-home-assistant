@@ -44,6 +44,7 @@ def coordinator_class(monkeypatch):
 async def test_detect_then_poll_model(coordinator_class, caplog, model, size, name):
     coordinator = object.__new__(coordinator_class)
     coordinator.connection_id = "test"
+    coordinator.successful_polls = coordinator.failed_polls = 0
     coordinator.password = "1234"
     coordinator._detected_model = None
     coordinator.server = AsyncMock()
@@ -69,6 +70,7 @@ async def test_detect_then_poll_model(coordinator_class, caplog, model, size, na
 async def test_4010_falls_back_when_partial_status_is_unavailable(coordinator_class):
     coordinator = object.__new__(coordinator_class)
     coordinator.connection_id = "test"
+    coordinator.successful_polls = coordinator.failed_polls = 0
     coordinator._detected_model = None
     coordinator._fetch_partial_status = AsyncMock(side_effect=TimeoutError)
     status = CentralStatus(model=CentralModel.AMT_4010)
@@ -77,3 +79,29 @@ async def test_4010_falls_back_when_partial_status_is_unavailable(coordinator_cl
     assert await coordinator._async_update_data() is status
     coordinator._fetch_partial_status.assert_awaited_once()
     assert coordinator._fetch_full_status.await_count == 2
+
+
+async def test_disconnected_poll_cannot_report_success(coordinator_class):
+    coordinator = object.__new__(coordinator_class)
+    coordinator.connection_id = None
+    with pytest.raises(Exception, match="Central desconectada"):
+        await coordinator._async_update_data()
+
+
+async def test_timeout_and_connection_replacement_are_not_valid_status(coordinator_class):
+    coordinator = object.__new__(coordinator_class)
+    coordinator.connection_id = "old"
+    coordinator._detected_model = CentralModel.AMT_2018_E
+    coordinator.successful_polls = coordinator.failed_polls = 0
+    coordinator._fetch_partial_status = AsyncMock(side_effect=TimeoutError)
+    with pytest.raises(Exception, match="Timeout"):
+        await coordinator._async_update_data()
+    assert coordinator.failed_polls == 1 and coordinator.last_error_type == "TimeoutError"
+
+    async def stale_response():
+        coordinator.connection_id = "new"
+        return PartialCentralStatus.parse(bytes(43))
+    coordinator._fetch_partial_status = stale_response
+    with pytest.raises(Exception, match="substituída"):
+        await coordinator._async_update_data()
+    assert coordinator.successful_polls == 0
