@@ -1,5 +1,6 @@
 """Coordinator para atualização periódica do status da central."""
 
+import asyncio
 import logging
 import time
 from datetime import datetime, timedelta, timezone
@@ -80,6 +81,7 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
         self.connection_id = connection_id
         self.password = password
         self.entry_id = entry_id
+        self.programming_lock = asyncio.Lock()
         self._detected_model: int | None = None
         """Modelo detectado da central (0x1E = AMT 2018 E/EG, 0x34 = AMT 2018 E SMART, 0x41 = AMT 4010)."""
         self.last_successful_poll: datetime | None = None
@@ -102,6 +104,11 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
             return
         if event.occurred_at and event == previous:
             return
+        if event != previous:
+            _LOGGER.info(
+                "Evento de arme/desarme: %s; codigo=%s particao=%s usuario=%s",
+                event.action, event.code, event.partition, event.user_number,
+            )
         self.last_arm_event = event
         self.last_arm_event_received_at = datetime.now(timezone.utc)
         # O próximo status publica o sensor sem simular uma nova amostra da sirene.
@@ -165,6 +172,10 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
                 
             if self.connection_id != connection_id:
                 raise UpdateFailed("Conexão substituída durante a consulta")
+            previous_armed = getattr(self, "_last_polled_armed", None)
+            if previous_armed is not None and status.armed != previous_armed:
+                _LOGGER.info("Estado confirmado pela central: %s", "Armada" if status.armed else "Desarmada")
+            self._last_polled_armed = status.armed
             self.last_successful_poll = datetime.now(timezone.utc)
             self.successful_polls += 1
             self.last_error_type = None
@@ -215,9 +226,32 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
         
         raise UpdateFailed("Não foi possível detectar o modelo da central")
     
-    async def _fetch_partial_status(self) -> PartialCentralStatus | None:
+    async def async_validate_status_password(self, password: str) -> None:
+        """Test a candidate without changing the running poller's credentials or state."""
+        connection_id = self.connection_id
+        if not connection_id:
+            raise ConnectionError("Aguardando conexão da central")
+        if self._detected_model == CentralModel.AMT_4010:
+            await self._fetch_full_status(password)
+        else:
+            try:
+                await self._fetch_partial_status(password)
+            except (OSError, UpdateFailed):
+                if self._detected_model is not None:
+                    raise
+                await self._fetch_full_status(password)
+        if connection_id != self.connection_id:
+            raise ConnectionError("A conexão mudou durante a validação")
+
+    def programming_host(self) -> str:
+        connection = self.server.connections.get(self.connection_id)
+        if not connection or not connection.is_connected:
+            raise ConnectionError("Aguardando conexão da central")
+        return connection.host
+
+    async def _fetch_partial_status(self, password=None) -> PartialCentralStatus | None:
         """Busca status parcial (0x5A) - 43 bytes."""
-        cmd = PartialStatusRequestCommand(self.password)
+        cmd = PartialStatusRequestCommand(self.password if password is None else password)
         response = await self.server.send_command(
             self.connection_id,
             cmd.build_net_frame(),
@@ -233,9 +267,9 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
         else:
             raise _status_error(response, "parcial")
     
-    async def _fetch_full_status(self) -> CentralStatus | None:
+    async def _fetch_full_status(self, password=None) -> CentralStatus | None:
         """Busca status completo (0x5B) - 54 bytes."""
-        cmd = StatusRequestCommand(self.password)
+        cmd = StatusRequestCommand(self.password if password is None else password)
         response = await self.server.send_command(
             self.connection_id,
             cmd.build_net_frame(),

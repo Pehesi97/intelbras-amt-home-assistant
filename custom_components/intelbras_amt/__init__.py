@@ -35,10 +35,6 @@ if _HAS_HOMEASSISTANT:
 
     _LOGGER = logging.getLogger(__name__)
 
-    # Log level INFO por padrão (evita inundar logs do HA com DEBUG)
-    logging.getLogger("custom_components.intelbras_amt.lib").setLevel(logging.INFO)
-    logging.getLogger("custom_components.intelbras_amt.coordinator").setLevel(logging.INFO)
-
     # Importa da biblioteca local
     from .lib.server import AMTServer, AMTServerConfig
     from .lib.protocol.isecnet import ISECNetFrame
@@ -49,6 +45,7 @@ if _HAS_HOMEASSISTANT:
         Platform.BINARY_SENSOR,
         Platform.SWITCH,
         Platform.SENSOR,
+        Platform.BUTTON,
     ]
 
     async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

@@ -144,3 +144,52 @@ async def test_status_rejection_is_actionable_without_exposing_password(coordina
     assert f"0x{code:02X}" in message and response.message in message
     assert ("senha do computador" in message) == hint
     assert "654321" not in message
+
+
+async def test_armed_state_logged_only_on_change(coordinator_class, caplog):
+    caplog.set_level("INFO")
+    coordinator = object.__new__(coordinator_class)
+    coordinator.connection_id = "test"
+    coordinator._detected_model = CentralModel.AMT_2018_E
+    coordinator.successful_polls = coordinator.failed_polls = 0
+    status = PartialCentralStatus(model=CentralModel.AMT_2018_E)
+    coordinator._fetch_partial_status = AsyncMock(return_value=status)
+    await coordinator._async_update_data()
+    status.armed = True
+    await coordinator._async_update_data()
+    await coordinator._async_update_data()
+    status.armed = False
+    await coordinator._async_update_data()
+    messages = [r.message for r in caplog.records if "Estado confirmado" in r.message]
+    assert messages == ["Estado confirmado pela central: Armada", "Estado confirmado pela central: Desarmada"]
+
+
+def test_arm_event_info_log_does_not_repeat_identical_event(coordinator_class, caplog):
+    caplog.set_level("INFO")
+    coordinator = object.__new__(coordinator_class)
+    coordinator.last_arm_event = None
+    # CID 3401: arm by user 007, partition 01.
+    frame = ISECNetFrame(command=0xB0, content=bytes.fromhex("11 01 02 03 04 01 08 03 04 0a 01 0a 01 0a 0a 07"))
+    coordinator.async_handle_event(frame)
+    coordinator.async_handle_event(frame)
+    messages = [r.message for r in caplog.records if "Evento de arme/desarme" in r.message]
+    assert len(messages) == 1
+    assert "Armado; codigo=401 particao=1 usuario=7" in messages[0]
+
+
+async def test_candidate_status_password_does_not_replace_live_password(coordinator_class):
+    coordinator = object.__new__(coordinator_class)
+    coordinator.connection_id = "test"
+    coordinator.password = "1234"
+    coordinator._detected_model = CentralModel.AMT_2018_E
+    coordinator.server = AsyncMock()
+    data = bytearray(43)
+    data[18] = 0x1E
+    coordinator.server.send_command.return_value = Response.from_isecnet_frame(ISECNetFrame.create_mobile_frame(bytes(data)))
+    await coordinator.async_validate_status_password("5678")
+    frame = coordinator.server.send_command.call_args.args[1]
+    assert b"5678" in frame.content and coordinator.password == "1234"
+    coordinator.server.send_command.return_value = Response.parse(bytes.fromhex("02 e9 e1 f5"))
+    with pytest.raises(Exception):
+        await coordinator.async_validate_status_password("9999")
+    assert coordinator.password == "1234"

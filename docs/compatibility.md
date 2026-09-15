@@ -1,17 +1,15 @@
 # Compatibilidade e limites conhecidos
 
-## Modelos
-
-| Modelo | Consulta de status | Validação |
+| Modelo | Consulta de status | Limpar disparo |
 | --- | --- | --- |
-| AMT 2018 E/EG | Parcial (`0x5A`) | Testada em hardware |
-| AMT 2018 E SMART | Parcial (`0x5A`) | Validação física pendente |
-| AMT 1000 Smart | Parcial (`0x5A`) | Compatibilidade relatada; testes automatizados |
-| AMT 4010 | Completa (`0x5B`) | Frame real coberto por teste; validação física da integração pendente |
+| AMT 2018 E/EG | Parcial | Beta |
+| AMT 2018 E SMART | Parcial | Beta |
+| AMT 1000 Smart | Parcial | Beta |
+| AMT 4010 | Completa | Beta |
 
-A integração recebe a conexão da central e atua como receptor TCP. A comunicação
-foi verificada com Home Assistant 2026.8.1. Outros firmwares e versões do HA
-podem apresentar diferenças.
+O modelo é detectado automaticamente. A compatibilidade dos comandos de
+programação depende também do firmware; o recurso beta pode ser recusado
+mesmo em um modelo contemplado.
 
 ## Estado do alarme
 
@@ -34,7 +32,7 @@ receptor. Consultas periódicas de status não identificam o usuário.
 São reconhecidos os códigos 401 (usuário), 456 (arme parcial), 403 (automático),
 407 (remoto) e 408 (uma tecla). Somente 401/456 fornecem identificação de usuário
 nesta integração; os demais deixam o número vazio. Códigos personalizados não
-são reconhecidos. A recepção desses eventos ainda precisa de validação física.
+são reconhecidos.
 
 B4 inclui o horário local do evento; B0 registra apenas o recebimento no HA.
 Eventos datados anteriores ao último evento também datado são ignorados, assim
@@ -51,18 +49,17 @@ consulta de status válida e é limpo ao reiniciar ou recarregar a integração.
 - O envio de arme/desarme não equivale à confirmação de execução; confira o
   estado reportado pela central.
 - Na AMT 4010, a consulta pode exigir a senha do computador. Configure-a em
-  [Reconfigurar](beta-options.md), preservando a senha apropriada aos comandos.
+  [Reconfigurar](configuration.md), preservando a senha apropriada aos comandos.
 - Não há suporte a AMT 8000, fotos ou programação da EEPROM.
 
-## Referências técnicas
+## Limpeza de disparos (beta)
 
-A implementação usa os documentos Intelbras **ISECnet — Centrais Alarme / Receptor
-IP, R14** e **ISECNet — Smartphones / Receptor IP, R15**. O calendário do status
-é interpretado como binário conforme capturas reais; não se aplica conversão BCD
-global. O mapeamento parcial de tamper/curto segue zonas 1–8 e 11–18. A indicação
-de sirene no status completo da 4010 ainda requer validação específica.
+Exige senha do computador e conexão local do HA à central na porta TCP 9009.
+Remove a memória de todas as zonas, sem apagar a programação da central ou o
+histórico do HA. Todas as partições devem estar desarmadas e a sirene desligada.
+Sem autenticação, formato de status reconhecido ou confirmação de limpeza, a
+operação apresenta erro. Não há repetição automática nem limpeza no desarme.
 
-Os testes em `custom_components/intelbras_amt/lib/tests` cobrem parsing,
-transporte TCP simulado e regras de estado. O roteiro `ha_native_check.py`
-verifica entidades e configuração com classes reais do Home Assistant.
-Testes simulados não substituem a validação em cada modelo de central.
+A sessão é encerrada ao terminar a operação e pode ocupar temporariamente o
+teclado, como uma conexão do AMT Remoto Mobile. A configuração valida acesso
+sem limpar a memória. Veja o [guia de configuração](configuration.md).

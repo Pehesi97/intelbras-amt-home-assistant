@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.2.0 — 2026-09-15
+
+- Botão **Limpar disparo (beta)** para AMT 2018 E/EG/E SMART, AMT 1000 Smart e AMT 4010.
+  Limpa a memória de todas as zonas por ação manual, com senha do computador,
+  todas as partições desarmadas e sirene desligada. Requer acesso local à central
+  na porta TCP 9009; a compatibilidade depende do modelo e firmware.
+- A limpeza exige confirmação da central e nova leitura do status, sem repetição
+  automática. Não é executada ao desarmar ou reiniciar a integração.
+- Reconfiguração separa senha de usuário, senha de consulta de status e senha
+  do computador. Permite manter, substituir ou remover credenciais opcionais.
+  Consulta e autenticação de programação são validadas antes de salvar;
+  falhas preservam a configuração anterior.
+- Redução de avisos repetidos de disparo memorizado. Mudanças de arme/desarme
+  e eventos com usuário passam a ser registrados em INFO. O nível de log
+  respeita a configuração do Home Assistant.
+- Documentação reorganizada, com explicação das senhas e limites do recurso beta.
+
+**Atualização:** preserva credenciais, entidades, IDs e opções da versão 1.x.
+Para habilitar a limpeza, configure explicitamente a senha do computador em
+**Reconfigurar → Limpar disparo (beta)**. A senha de consulta não é reutilizada
+automaticamente.
+
 ## 1.1.0 — 2026-09-14
 
 - Sensor Data/Hora desativado por padrão para novas entidades.
@@ -50,4 +72,4 @@ Veja o [guia de migração](docs/zone-attributes.md).
 - Remoção da senha dos logs de envio.
 
 Mantém a estrutura de entidades da versão 0.7.3.
-Consulte os [limites conhecidos](docs/protocol-review.md).
+Consulte os [limites conhecidos](docs/compatibility.md).

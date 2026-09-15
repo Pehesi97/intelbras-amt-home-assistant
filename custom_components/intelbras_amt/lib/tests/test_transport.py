@@ -325,3 +325,56 @@ async def test_tcp_receiver_transaction(command, size):
             await writer.wait_closed()
             await asyncio.wait_for(disconnected.wait(), 1)
         await server.stop()
+
+
+@pytest.mark.parametrize("short_reply", [False, True])
+async def test_clear_memory_preserves_events_and_ignores_unrelated_responses(short_reply):
+    from custom_components.intelbras_amt.lib.protocol.commands.clear_alarm import ClearAlarmMemoryCommand
+
+    command = ClearAlarmMemoryCommand()
+    assert command.build_net_frame().build() == bytes.fromhex("05 e7 01 1c 06 48 4e")
+    expected = bytes.fromhex("03 e7 00 00 1b" if short_reply else "05 e7 01 9c 85 4b 4e")
+    server = AMTServer(AMTServerConfig(response_timeout=0.2))
+    reader = asyncio.StreamReader()
+    writer = writer_for(reader)
+    done = asyncio.Event()
+    received = []
+    responses = []
+    failures = []
+
+    def respond(data):
+        if data == command.build_net_frame().build():
+            reader.feed_data(EVENT + b"\xf7" + bytes.fromhex("02 e9 fe ea"))
+            reader.feed_data(ISECNetFrame.create_mobile_frame(bytes(43)).build())
+            # Correct outer checksum, incorrect inner CRC must not complete clear.
+            reader.feed_data(ISECNetFrame(command=0xE7, content=b"\x01\x9c\x00\x00").build())
+            reader.feed_data(expected)
+
+    writer.write.side_effect = respond
+
+    @server.on_heartbeat
+    async def clear(conn):
+        try:
+            responses.append(await server.send_command(conn.id, command.build_net_frame()))
+        except Exception as err:
+            failures.append(err)
+        finally:
+            done.set()
+
+    @server.on_frame
+    async def on_frame(conn, frame):
+        received.append(frame)
+
+    reader.feed_data(b"\xf7")
+    handler = asyncio.create_task(server._handle_client(reader, writer))
+    try:
+        await asyncio.wait_for(done.wait(), 1)
+        assert not failures
+        assert command.is_response(responses[0].raw_frame) is not short_reply
+        assert command.is_unconfirmed_response(responses[0].raw_frame) is short_reply
+        assert responses[0].raw_frame.build() == expected
+        assert ISECNetFrame.parse(EVENT) in received
+        assert bytes.fromhex("fe") in [call.args[0] for call in writer.write.call_args_list]
+    finally:
+        reader.feed_eof()
+        await handler

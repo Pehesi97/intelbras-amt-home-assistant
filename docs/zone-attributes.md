@@ -1,4 +1,4 @@
-# 1.0.0: detalhes da zona em atributos
+# Zonas e migração da versão 0.x
 
 Cada zona possui duas entidades: `Zona NN` para abertura e `Zona NN - Problema`
 para falhas. As duas expõem os cinco atributos descritos abaixo. O sensor de
@@ -55,7 +55,7 @@ Veja [um cartão pronto para a zona 25](zone-25-card.yaml); ajuste o ID em outra
 
 ## Breaking change: remoção das auxiliares
 
-A major remove automaticamente do registro as entidades de zona de violação,
+A atualização da versão 0.x para a 1.x remove automaticamente do registro as entidades de zona de violação,
 bypass, bateria baixa, tamper e curto. Elas deixam de ser criadas. A remoção usa
 a API nativa do HA, limitada aos IDs conhecidos desta entrada da integração.
 Na AMT2018, ficam 48 entidades de abertura e 48 de problema; na AMT4010,
@@ -84,7 +84,7 @@ podem reagir a essas atualizações. Para observar apenas abertura, use `to: "on
 
 O SDK ISECMobile R15 especifica zonas 11–18 no segundo byte de tamper/curto do
 status parcial. O parser usava 9–16. O mapeamento foi corrigido no parser
-compartilhado, com teste dos dois extremos; os atributos
+compartilhado; os atributos
 agora usam a leitura corrigida. Isso corrige a zona associada ao alerta
 sem alterar IDs. Integrações que compensavam manualmente esse deslocamento
 precisam remover a compensação. O status completo permanece com zonas 1–8.
@@ -93,4 +93,4 @@ precisam remover a compensação. O status completo permanece com zonas 1–8.
 
 Estas mudanças pertencem à versão **1.0.0**. A versão **0.7.4** mantém a estrutura
 anterior de entidades. Consulte o [changelog](../CHANGELOG.md) e os
-[limites conhecidos](protocol-review.md).
+[limites conhecidos](compatibility.md).

@@ -1,548 +1,140 @@
-# Intelbras AMT - Home Assistant Integration
+# Intelbras AMT para Home Assistant
 
-Integração para Home Assistant que permite controlar centrais de alarme Intelbras via protocolo ISECNet/ISECMobile.
+Integração local para controlar e acompanhar centrais Intelbras AMT pelo Home Assistant.
 
-## Modelos Suportados
+## Modelos suportados
 
-- ✅ **AMT 2018 E/EG/E SMART** - Detecção automática (comando 0x5A)
-- ✅ **AMT 1000 Smart** - Modelo 0x36, status parcial (comando 0x5A)
-- ✅ **AMT 4010** - Detecção automática (comando 0x5B)
+| Modelo | Monitoramento e controles | Limpar disparo |
+| --- | --- | --- |
+| AMT 2018 E/EG | Sim | Beta |
+| AMT 2018 E SMART | Sim | Beta |
+| AMT 1000 Smart | Sim | Beta |
+| AMT 4010 | Sim | Beta |
 
-A integração **detecta automaticamente** o modelo da central e usa o comando apropriado!
+O modelo é detectado automaticamente. Recursos disponíveis dependem da central
+e do firmware. Consulte os [limites de compatibilidade](docs/compatibility.md).
 
-## Características
+## Instalação
 
-- ✅ **Controle completo do alarme** - Armar/desarmar via interface do Home Assistant
-- ✅ **Monitoramento de zonas** - Acompanhe status de todas as zonas (abertas, violadas, bypass)
-- ✅ **Controle de saídas** - Controle PGMs e sirene diretamente do Home Assistant
-- ✅ **Sensores e binary sensors** - Informações detalhadas sobre o status da central
-- ✅ **Configuração via UI** - Setup fácil através do Config Flow
-- ✅ **Atualização automática** - Status atualizado periodicamente
-- ✅ **Suporte a partições** - Controle individual de partições A, B, C e D
-- ✅ **Detecção automática de modelo** - Suporta múltiplos modelos sem configuração
-- ✅ **Servidor standalone** - Biblioteca reutilizável para outros projetos
+### HACS
 
-## Requisitos
+1. Em **HACS → Repositórios personalizados**, adicione
+   `https://github.com/Pehesi97/intelbras-amt-home-assistant` na categoria **Integração**.
+2. Baixe **Intelbras AMT 2018/4010** e reinicie o Home Assistant.
+3. Abra **Configurações → Dispositivos e serviços → Adicionar integração** e
+   procure por **Intelbras AMT 2018/4010**.
+4. Informe a porta TCP e a senha de usuário da central. A senha de consulta é opcional;
+   veja a tabela abaixo antes de preenchê-la.
 
-- **Home Assistant**: validado com 2026.8.1; versões anteriores não foram verificadas para a v1
-- **Central Intelbras**: AMT 2018 E/EG/E SMART ou AMT 4010 com firmware compatível
-- **Conexão de rede** entre a central e o Home Assistant
-- **Senha da central** (4-6 dígitos configurada na central)
+### Instalação manual
 
-## Como Funciona
+Copie `custom_components/intelbras_amt` deste repositório ou do ZIP da release
+para `/config/custom_components/intelbras_amt`, reinicie o Home Assistant e
+adicione a integração pela interface.
 
-A central Intelbras AMT **conecta ativamente** ao servidor TCP do Home Assistant e **mantém a conexão aberta**. O servidor:
+### Conexão da central
 
-1. Escuta na porta 9009 (configurável)
-2. Aceita conexão da central
-3. Responde automaticamente aos heartbeats (keep-alive)
-4. Envia comandos quando você arma/desarma pelo HA
-5. Confirma eventos Contact-ID `0xB0` e `0xB4` com o ACK curto `FE`, inclusive durante consultas de status
+A **central inicia a conexão** com o Home Assistant. Configure na central o
+IP do Home Assistant como servidor de destino e a mesma porta TCP informada
+na integração (padrão: **9009**). Essa porta deve estar acessível pela central.
 
-A revisão do SDK, as divergências encontradas e o roteiro de validação das issues
-9, 10 e 11 estão em [docs/protocol-review.md](docs/protocol-review.md).
+O Home Assistant recebe eventos e consulta o estado pela conexão persistente.
+Não é necessário informar o IP da central no formulário. Ao mudar a porta em
+**Reconfigurar**, ajuste também o destino na central.
 
-```
-┌─────────────────────────────────────────────────┐
-│              HOME ASSISTANT                     │
-│  ┌───────────────────────────────────────────┐  │
-│  │     Custom Component (intelbras_amt)      │  │
-│  │                                           │  │
-│  │  TCP Server ◄──── Central conecta aqui    │  │
-│  │      :9009       (e mantém conexão aberta)│  │
-│  │         │                                 │  │
-│  │         ▼                                 │  │
-│  │  alarm_control_panel                      │  │
-│  │  - Armar (away/home)                      │  │
-│  │  - Desarmar                               │  │
-│  │  - Status                                 │  │
-│  └───────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────┘
-             ▲
-             │ TCP (conexão persistente)
-             │ Heartbeats a cada 60 segundos
-             │
-      ┌──────┴──────┐
-      │ Central AMT │
-      │ 2018 / 4010 │
-      └─────────────┘
-```
+## Qual senha usar
 
-## Status do Projeto
+| Campo | Função | Aplicação |
+| --- | --- | --- |
+| Senha de usuário, 4–6 dígitos | Armar/desarmar, controlar sirene e PGMs; consultar status quando não há senha separada | Todos os modelos suportados |
+| Senha para consulta de status, opcional | Apenas leitura de status | Nas AMT 2018 e 1000 Smart, normalmente deixe vazio. Na AMT 4010, informe a senha do computador se ela for exigida para consulta |
+| Senha do computador, 6 dígitos | Autenticar a limpeza de disparos | AMT 2018 E/EG/E SMART, AMT 1000 Smart e AMT 4010; mesma senha usada no AMT Remoto Mobile por IP Local |
 
-🟢 **Funcional** - Validada com AMT 2018 E/EG real. A senha separada da AMT 4010
-e os cenários de partições ainda têm [limites de validação](docs/protocol-review.md).
+A senha do computador para limpeza é configurada em **Reconfigurar → Limpar
+disparo (beta)**. Na AMT 4010, mesmo que essa senha seja usada na consulta,
+informe-a também na seção de limpeza para habilitar o botão.
 
-| Componente | Status | Descrição |
-|------------|--------|-----------|
-| Protocolo ISECNet/ISECMobile | ✅ | Implementação completa do protocolo |
-| Checksum XOR | ✅ | Cálculo de checksum ISECNet |
-| CRC-16 | ✅ | Cálculo de CRC para ISECProgram |
-| ISECNet Frame | ✅ | Builder/Parser da camada de transporte |
-| ISECMobile Frame | ✅ | Builder/Parser da camada de comandos |
-| Comando 0x41 | ✅ | Ativar/Armar central (todas partições ou específica) |
-| Comando 0x44 | ✅ | Desativar/Desarmar central (todas partições ou específica) |
-| Comando 0x43 | ✅ | Ligar sirene |
-| Comando 0x63 | ✅ | Desligar sirene |
-| Comando 0x50 | ✅ | Controle de PGM (ligar/desligar saídas 1-19) |
-| Comando 0x5A | ✅ | Solicitação de status parcial (43 bytes) |
-| Comando 0x5B | ✅ | Solicitação de status completo (54 bytes) |
-| Comando 0x94 | ✅ | Identificação da central (conta, canal, MAC) |
-| Comando 0xF7 | ✅ | Heartbeat (keep-alive) |
-| Respostas ACK/NACK | ✅ | Parser de todas as respostas |
-| Servidor TCP | ✅ | Servidor asyncio porta 9009 |
-| Home Assistant Integration | ✅ | Integração completa com múltiplas entidades |
-| Config Flow | ✅ | Configuração via UI do Home Assistant |
-| Testes | ✅ | Testes unitários abrangentes |
+Reconfigurar altera as credenciais usadas pela integração; não muda as senhas
+gravadas na central. As senhas salvas nunca são exibidas nos formulários.
+Consulte o [guia de configuração](docs/configuration.md).
 
-### Entidades Disponíveis
+## Entidades
 
-A integração expõe as seguintes entidades no Home Assistant:
+- **Alarme** e **Armar Alarme**: arme/desarme geral; controles de partições quando disponíveis.
+- **Sirene** e **PGMs**: controle das saídas da central.
+- **Zona NN**: abertura, com atributos `violada`, `bypass`, `bateria_baixa`,
+  `tamper` e `curto_circuito`.
+- **Zona NN - Problema**: indica bateria baixa, tamper ou curto; possui os mesmos
+  atributos da zona. Memória de disparo e bypass não acionam esse estado.
+- **Problemas do sistema**: energia, bateria, sirene, linha telefônica e comunicação,
+  conforme os dados fornecidos pela central.
+- **Sensores de resumo**: modelo, firmware, zonas abertas, violadas e em bypass,
+  sirene, armamento e data/hora. Data/hora é desativado por padrão em novas instalações.
+- **Último arme/desarme**: ação, número de usuário, partição e horário quando
+  informados pelos eventos da central. Reiniciar ou recarregar limpa essa informação.
+- **Limpar disparo (beta)**: limpeza manual da memória de todas as zonas.
 
-#### Alarm Control Panel
-- **Alarme** - Controle principal do alarme (armar/desarmar, modo away/home)
+**Zonas Violadas mostra números de zona**, não uma contagem: `26` significa zona 26.
+A memória pode permanecer após desarmar. Sensores sem fio que transmitem somente
+abertura não permitem comprovar o fechamento físico pela ausência de indicação.
+Atributos não disponíveis aparecem como `null`, em vez de `false`.
+Veja [como usar os atributos das zonas](docs/zone-attributes.md).
 
-Com partições habilitadas, o bit global de disparo junto do arme global exige
-também uma zona violada para confirmar `TRIGGERED`. Isso reduz os falsos da
-[#10](https://github.com/Pehesi97/intelbras-amt-home-assistant/issues/10), em que
-abrir uma zona de uma partição desarmada era confundido com disparo. Os caminhos
-de detecção pela sirene e o comportamento sem partições permanecem iguais.
-O filtro não associa zonas a partições nem distingue memória antiga de violação
-atual; pânico silencioso sem zona associada pode não ser reconhecido em centrais
-particionadas. Veja os [testes e limites da mitigação](docs/protocol-review.md).
+### Limpar disparo (beta)
 
-#### Switches
-- **Armar Alarme** - Switch para armar/desarmar todas as áreas
-- **Sirene** - Switch para ligar/desligar a sirene
-- **PGM 1-19** - Switches para controlar cada saída programável
-- **Partição A/B/C/D** - Switches para armar/desarmar partições individuais
+O botão exige senha do computador configurada, central conectada, todas as
+partições desarmadas e sirene desligada. O HA precisa alcançar o IP local da
+central na **porta TCP 9009**, além da conexão de monitoramento já existente.
 
-#### Sensors
-- **Modelo** - Modelo da central (hex)
-- **Firmware** - Versão do firmware
-- **Data/Hora** - Data e hora da central; desativado por padrão em novas instalações
-- **Zonas Abertas** - Contagem e lista de zonas abertas
-- **Zonas Violadas** - Lista de zonas violadas (ex: "26" ou "26, 30")
-- **Zonas em Bypass** - Contagem e lista de zonas em bypass
-- **Sirene** - Status da sirene (Ligada/Desligada)
-- **Armada** - Status de armamento geral
-- **Último arme/desarme** - Última ação recebida, com número do usuário, partição
-  e horário nos atributos. Requer envio de eventos pela central; quando o evento
-  não identifica um usuário, o número fica vazio. Reiniciar ou recarregar a
-  integração limpa essa informação.
+A operação autentica, verifica o estado, limpa a memória e exige confirmação
+por nova leitura. Não apaga a programação ou o histórico do HA, não repete o
+comando automaticamente e não executa limpeza ao desarmar ou reiniciar.
+A sessão pode ocupar temporariamente o teclado e é encerrada após a operação.
 
-#### Binary Sensors
-- **Zona NN** - Sensor principal de abertura por zona (48 na AMT2018; 64 na AMT4010),
-  com atributos `violada`, `bypass`, `bateria_baixa`, `tamper` e `curto_circuito`.
-  Dados não representados no status recebido aparecem como `null`; bateria é
-  um alerta de carga baixa, não uma porcentagem.
-- **Zona NN - Problema** - Agrupa bateria baixa, tamper e curto. Expõe os
-  atributos da zona e indica problema se algum desses alertas for verdadeiro.
-  Sem nenhum diagnóstico disponível, fica desconhecido. Bypass e memória de
-  violação não acionam esse estado.
-- **Migração na major:** as antigas entidades auxiliares de zona são removidas.
-  Automações e dashboards devem usar os atributos do sensor principal.
-  Veja [onde visualizar os atributos e como migrar](docs/zone-attributes.md).
-- **Problemas do Sistema**:
-  - Falta de Energia
-  - Bateria Baixa
-  - Bateria Ausente
-  - Bateria em Curto
-  - Sobrecarga Auxiliar
-  - Fio Sirene Cortado
-  - Curto Sirene
-  - Linha Telefônica Cortada
-  - Falha Comunicação
+O recurso permanece **beta**: a compatibilidade pode variar conforme modelo e
+firmware. Sem confirmação da central, o botão apresenta erro.
 
-## Reconfiguração, opções e diagnóstico
+## Opções, diagnóstico e logs
 
-A versão 1.0 permite alterar porta/senhas em **Reconfigurar**, escolher zonas/PGMs e
-intervalo em **Opções**, e **Baixar diagnóstico** na página da integração.
-Sem conexão, as entidades ficam indisponíveis até receber novo status válido.
-O intervalo padrão é de **2 segundos**; configurações existentes são mantidas.
-Veja [como configurar](docs/beta-options.md).
+Em **Opções**, escolha zonas, PGMs e intervalo de atualização (1–60 segundos,
+padrão: 2). Desmarcar uma zona desabilita suas entidades sem apagar IDs ou
+personalizações; não desativa a zona na central nem elimina sua indicação dos resumos.
 
-## Atualização da 0.x para a 1.0
+**Baixar diagnóstico** reúne modelo, firmware e estatísticas de comunicação,
+sem senhas, endereços ou frames brutos. Os logs ficam em **Configurações →
+Sistema → Logs**. INFO registra mudanças de arme/desarme; use a depuração
+apenas durante uma investigação. Veja [configuração e logs](docs/configuration.md).
 
-A v1 remove as entidades auxiliares de violação, bypass, bateria baixa, tamper e
-curto de cada zona, inclusive as desabilitadas. Esses dados passam aos atributos
-de `Zona NN`; `Zona NN - Problema` agrupa bateria baixa, tamper e curto.
+## Atualização
 
-Faça backup e adapte dashboards/automações antes de atualizar. O sensor de abertura
-mantém o ID já registrado e as personalizações, mas seu nome padrão passa a `Zona NN`.
-Não é necessário remover ou recadastrar a integração. Veja o
-[guia de migração](docs/zone-attributes.md) e o [changelog](CHANGELOG.md).
+A **1.2.0 preserva as entidades, credenciais e opções da versão 1.x**.
+A limpeza precisa ser habilitada explicitamente com a senha do computador.
+Consulte o [changelog](CHANGELOG.md).
 
-## Instalação no Home Assistant
+Ao migrar da **0.x para a 1.x**, as antigas entidades auxiliares de violação,
+bypass, bateria baixa, tamper e curto de cada zona são removidas. Os dados
+passam aos atributos de `Zona NN`; `Zona NN - Problema` agrupa os alertas.
+Faça backup e adapte automações e dashboards seguindo o
+[guia de migração](docs/zone-attributes.md). Não é necessário recadastrar a integração.
 
-### Opção 1: Via HACS (Recomendado)
-
-1. Certifique-se de que o [HACS](https://hacs.xyz/) está instalado no seu Home Assistant
-
-2. No HACS, vá em **Integrações** → **Menu (⋮)** → **Repositórios Customizados**
-
-3. Adicione este repositório:
-   - **URL**: `https://github.com/Pehesi97/intelbras-amt-home-assistant`
-   - **Categoria**: Integração
-
-4. Procure por "Intelbras AMT 2018/4010" no HACS e clique em **Baixar**
-
-5. Reinicie o Home Assistant
-
-6. Vá em **Configurações → Dispositivos e Serviços → Adicionar Integração**
-
-7. Busque por "Intelbras AMT 2018/4010"
-
-8. Configure:
-   - **Porta TCP**: 9009 (ou outra porta disponível)
-   - **Senha para comandos**: A senha de 4–6 dígitos configurada na central
-   - **Senha para consulta de status** (opcional): na AMT 4010, pode ser necessário
-     usar a senha do computador. Sem ela, as consultas usam a senha dos comandos.
-
-### Opção 2: Instalação Manual (Custom Components)
-
-1. Acesse a pasta `custom_components` do seu Home Assistant:
-   - **Home Assistant OS/Supervised**: `/config/custom_components/`
-   - **Home Assistant Container**: No volume mapeado para `/config/custom_components/`
-   - **Home Assistant Core**: No diretório de configuração do HA
-
-2. Copie a pasta `custom_components/intelbras_amt` para dentro de `custom_components/`:
-   ```bash
-   # Exemplo no Home Assistant OS
-   cp -r custom_components/intelbras_amt /config/custom_components/
-   ```
-
-3. Certifique-se de que a estrutura está correta:
-```
-├── custom_components/
-│   └── intelbras_amt/          # ← Custom Component para Home Assistant
-│       ├── __init__.py         # Setup: inicia servidor TCP
-│       ├── alarm_control_panel.py  # Entidade do alarme
-│       ├── binary_sensor.py    # Binary sensors (zonas, problemas)
-│       ├── sensor.py           # Sensors (status, contadores)
-│       ├── switch.py           # Switches (PGMs, sirene, partições)
-│       ├── coordinator.py      # Data update coordinator
-│       ├── config_flow.py      # Configuração via UI
-│       ├── const.py
-│       ├── manifest.json
-│       ├── translations/
-│       │   └── pt-BR.json     # Traduções em português
-│       └── lib/               # ← Biblioteca de protocolo
-│           ├── __main__.py    # Servidor standalone
-│           ├── const.py
-│           ├── protocol/
-│           │   ├── checksum.py         # Checksum XOR e CRC-16
-│           │   ├── isecnet.py          # Frame ISECNet (transporte)
-│           │   ├── isecmobile.py       # Frame ISECMobile (comandos)
-│           │   ├── responses.py        # Parser ACK/NACK
-│           │   └── commands/
-│           │       ├── activation.py   # Comando 0x41 (armar)
-│           │       ├── deactivation.py # Comando 0x44 (desarmar)
-│           │       ├── siren.py        # Comandos 0x43/0x63
-│           │       ├── pgm.py          # Comando 0x50 (controle PGM)
-│           │       ├── status.py       # Comandos 0x5A/0x5B
-│           │       └── connection.py   # Comando 0x94
-│           ├── server/
-│           │   ├── tcp_server.py      # Servidor TCP asyncio
-│           │   └── connection_manager.py
-│           └── tests/                 # Testes unitários
-└── run_server.py               # ← Wrapper para rodar servidor standalone
-```
-
-4. Reinicie o Home Assistant
-
-5. Vá em **Configurações → Dispositivos e Serviços → Adicionar Integração**
-
-6. Busque por "Intelbras AMT 2018/4010"
-
-7. Configure:
-   - **Porta TCP**: 9009 (ou outra porta disponível)
-   - **Senha para comandos**: A senha de 4–6 dígitos configurada na central
-   - **Senha para consulta de status** (opcional): na AMT 4010, pode ser necessário
-     usar a senha do computador. Sem ela, as consultas usam a senha dos comandos.
-
-### Configuração da Central AMT 2018 / 4010
-
-Após instalar a integração, configure a central para conectar ao Home Assistant:
-
-1. Acesse o modo de programação da central AMT 2018 / 4010
-
-2. Configure o **IP do servidor** (IP do seu Home Assistant)
-
-3. Configure a **porta: 9009** (ou a porta que você configurou na integração)
-
-4. A central iniciará a conexão TCP automaticamente e aparecerá como conectada no Home Assistant
-
-> **Nota:** A central é o *client* e o Home Assistant é o *server*. A central inicia a conexão e envia heartbeats periodicamente para manter a conexão ativa.
-
-## Instalação (Desenvolvimento)
-
-### Com uv (recomendado)
+## Desenvolvimento
 
 ```bash
-# Instalar uv (se ainda não tiver)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Faça um fork deste repositório e clone o repositório criado
-git clone https://github.com/<seu usuário>/intelbras-amt-homeassistant.git
-cd intelbras-amt-homeassistant
-
-# Instalar dependências e criar venv automaticamente
-uv sync
-
-# Executar testes
-uv run pytest -v
-
-# Executar servidor standalone
-uv run python run_server.py
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e '.[dev]'
+pytest -q
 ```
 
-### Com pip (alternativo)
+O código da integração fica em `custom_components/intelbras_amt`; `lib` contém
+protocolo, transporte e servidor standalone. Para executar o servidor interativo:
 
 ```bash
-# Faça um fork deste repositório e clone o repositório criado
-git clone https://github.com/<seu usuário>/intelbras-amt-homeassistant.git
-cd intelbras-amt-homeassistant
-
-# Crie um ambiente virtual
-python3 -m venv venv
-source venv/bin/activate
-
-# Instale as dependências
-pip install -e ".[dev]"
-
-# Execute os testes
-pytest -v
+python run_server.py --port 9009
 ```
 
-## Uso da Biblioteca
-
-### Construir comandos
-
-```python
-from custom_components.intelbras_amt.lib.protocol.commands import (
-    ActivationCommand,
-    DeactivationCommand,
-    PGMCommand,
-    SirenCommand,
-    StatusRequestCommand,
-    PartialStatusRequestCommand,
-    CentralStatus,
-    PartialCentralStatus,
-)
-
-# Armar todas as partições
-cmd = ActivationCommand.arm_all(password="1234")
-packet = cmd.build()
-print(packet.hex(' '))  # 08 e9 21 31 32 33 34 41 21 5b
-
-# Armar partição específica
-cmd_a = ActivationCommand.arm_partition_a(password="1234")
-cmd_b = ActivationCommand.arm_partition_b(password="1234")
-cmd_stay = ActivationCommand.arm_stay(password="1234")
-
-# Desarmar todas as partições
-cmd_disarm = DeactivationCommand.disarm_all(password="1234")
-
-# Desarmar partição específica
-cmd_disarm_a = DeactivationCommand.disarm_partition_a(password="1234")
-
-# Controlar PGM
-cmd_pgm_on = PGMCommand.turn_on(password="1234", pgm_number=1)   # Liga PGM 1
-cmd_pgm_off = PGMCommand.turn_off(password="1234", pgm_number=2)  # Desliga PGM 2
-
-# Controlar Sirene
-from intelbras_amt.protocol.commands import SirenCommand
-cmd_siren_on = SirenCommand.turn_on_siren(password="1234")   # Liga sirene
-cmd_siren_off = SirenCommand.turn_off_siren(password="1234")  # Desliga sirene
-
-# Solicitar status completo
-cmd_status = StatusRequestCommand(password="1234")
-# Após receber resposta de 54 bytes:
-# status = CentralStatus.parse(response_data)
-# print(status.armed, status.zones.open_zones, status.partitions.partition_a_armed)
-
-# Solicitar status parcial (mais rápido, 43 bytes)
-cmd_status_partial = PartialStatusRequestCommand(password="1234")
-# Após receber resposta de 43 bytes:
-# status = PartialCentralStatus.parse(response_data)
-# print(status.armed, status.zones.violated_zones, status.siren_on)
-```
-
-### Iniciar servidor e enviar comandos
-
-```python
-import asyncio
-from custom_components.intelbras_amt.lib.server import AMTServer
-from custom_components.intelbras_amt.lib.protocol.commands import ActivationCommand
-
-async def main():
-    server = AMTServer()
-    
-    @server.on_connect
-    async def on_connect(conn):
-        print(f"Central conectada: {conn.id}")
-        
-        # Enviar comando de ativação
-        cmd = ActivationCommand.arm_all(password="1234")
-        response = await server.send_command(
-            conn.id,
-            cmd.build_net_frame(),
-            wait_response=True
-        )
-        
-        if response.is_success:
-            print("✓ Alarme armado com sucesso!")
-        else:
-            print(f"✗ Erro: {response.message}")
-    
-    @server.on_disconnect
-    async def on_disconnect(conn):
-        print(f"Central desconectada: {conn.id}")
-    
-    # Heartbeats (0xF7) são respondidos automaticamente
-    print("Aguardando conexão da central na porta 9009...")
-    await server.serve_forever()
-
-asyncio.run(main())
-```
-
-### Parsear respostas
-
-```python
-from custom_components.intelbras_amt.lib.protocol.responses import Response
-from custom_components.intelbras_amt.lib.protocol.isecnet import ISECNetFrame
-
-# Parsear frame recebido
-frame = ISECNetFrame.parse(raw_bytes)
-response = Response.from_isecnet_frame(frame)
-
-if response.is_success:
-    print("Comando executado!")
-else:
-    print(f"Erro: {response.message}")
-    # Possíveis erros:
-    # - Senha incorreta
-    # - Zonas abertas
-    # - Comando inválido
-    # - etc.
-```
-
-## Protocolo ISECNet/ISECMobile
-
-Não temos uma explicação completa do protocolo aqui pois a Intelbras requer assinatura de documentos para a liberação da SDK.
-
-## Rodar Servidor (Desenvolvimento)
-
-Para testar a comunicação com sua central sem o Home Assistant:
-
-```bash
-# Inicia servidor na porta 9009
-uv run python run_server.py
-
-# Com porta e senha customizados
-uv run python run_server.py --port 9009 --password 1234
-
-# Modo verbose (mostra heartbeats)
-uv run python run_server.py -v
-
-# Ou com python direto (sem uv)
-python3 run_server.py --port 9009 --password 3007 --verbose
-```
-
-O servidor interativo aceita os seguintes comandos:
-
-#### Comandos de Armamento
-- `arm` - Armar todas as partições
-- `arm a|b|c|d` - Armar partição específica (A, B, C ou D)
-- `arm stay` - Armar no modo Stay
-- `disarm` - Desarmar todas as partições
-- `disarm a|b|c|d` - Desarmar partição específica
-
-#### Controle de Saídas
-- `pgm <1-19> on|off` - Controlar saída PGM (ex: `pgm 1 on`, `pgm 2 off`)
-- `siren on` - Ligar a sirene
-- `siren off` - Desligar a sirene
-
-#### Consulta de Status
-- `info` - Solicitar status completo da central (comando 0x5B, 54 bytes)
-- `info-partial` - Solicitar status parcial da central (comando 0x5A, 43 bytes)
-- `status` - Ver conexões TCP ativas e estatísticas
-
-#### Outros
-- `help` - Mostrar ajuda com todos os comandos
-- `quit` ou `exit` - Encerrar servidor
-
-## Executar Testes
-
-```bash
-# Todos os testes
-uv run pytest -v
-
-# Apenas testes de transporte
-uv run pytest -v custom_components/intelbras_amt/lib/tests/test_transport.py
-```
-
-## Troubleshooting
-
-### A central não conecta ao Home Assistant
-
-1. **Verifique o IP e porta**: Certifique-se de que a central está configurada com o IP correto do Home Assistant e a porta 9009 (ou a porta que você configurou)
-
-2. **Firewall**: Verifique se o firewall do Home Assistant permite conexões TCP na porta configurada
-
-3. **Rede**: Confirme que a central e o Home Assistant estão na mesma rede ou que há roteamento adequado
-
-4. **Logs**: Verifique os logs do Home Assistant para erros:
-   ```bash
-   # No Home Assistant, vá em Configurações → Sistema → Logs
-   # Procure por "intelbras_amt" ou "AMT"
-   ```
-
-### Comandos não funcionam
-
-1. **Senha incorreta**: Verifique se a senha configurada na integração corresponde à senha da central (4-6 dígitos)
-
-2. **Central desconectada**: Verifique se a central está conectada (status na integração)
-
-3. **Timeout**: Se houver timeouts, verifique a conexão de rede e se a central está respondendo
-
-### Entidades não aparecem
-
-1. **Reinicie o Home Assistant** após instalar a integração
-
-2. **Verifique os logs** para erros de carregamento
-
-3. **Limpe o cache** do navegador se as entidades não aparecerem na interface
-
-### Status não atualiza
-
-1. O coordinator atualiza o status periodicamente (padrão: a cada 2 segundos)
-
-2. Você pode forçar uma atualização manualmente através do serviço `homeassistant.update_entity`
-
-3. Verifique se a central está enviando heartbeats (verifique os logs)
-
-**Estrutura unificada:** Todo o código está em `custom_components/intelbras_amt/`!
-- **`lib/`** - Biblioteca de protocolo (servidor, protocolo)
-- **Raiz** - Integração Home Assistant (coordinator, entidades)
-
-## Contribuindo
-
-1. Fork o projeto
-2. Crie uma branch (`git checkout -b feature/novo-comando`)
-3. Faça suas modificações em `custom_components/intelbras_amt/`
-4. Execute os testes (`uv run pytest -v`)
-5. Commit suas mudanças (`git commit -m 'Adiciona comando X'`)
-6. Push para a branch (`git push origin feature/novo-comando`)
-7. Abra um Pull Request
+Use `--help` para opções e `help` no terminal interativo para listar os comandos.
 
 ## Licença
 
-MIT
-
-## Referências
-
-- Documentação ISECNet/ISECMobile da Intelbras
-- [Home Assistant Developer Docs](https://developers.home-assistant.io/)
-- [HACS](https://hacs.xyz/)
+[MIT](LICENSE).

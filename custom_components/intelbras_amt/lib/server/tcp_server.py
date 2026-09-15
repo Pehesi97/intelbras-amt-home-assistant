@@ -474,6 +474,8 @@ class AMTServer:
 
     def _expected_response_kind(self, frame: ISECNetFrame) -> str:
         """Retorna o tipo de resposta esperado para o comando enviado."""
+        if frame.command == 0xE7 and frame.content == b"\x01\x1c\x06\x48":
+            return "clear_alarm_memory"
         if not frame.is_mobile_command:
             return "any"
 
@@ -506,6 +508,11 @@ class AMTServer:
     ) -> bool:
         """Verifica se o frame recebido corresponde ao comando pendente."""
         expected = connection.pending_response_kind
+        if expected == "clear_alarm_memory":
+            from ..protocol.commands.clear_alarm import ClearAlarmMemoryCommand
+
+            return (ClearAlarmMemoryCommand.is_response(frame)
+                    or ClearAlarmMemoryCommand.is_unconfirmed_response(frame))
         if expected in (None, "any"):
             return True
 

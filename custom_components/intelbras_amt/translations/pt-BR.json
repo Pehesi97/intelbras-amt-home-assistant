@@ -3,31 +3,61 @@
     "step": {
       "user": {
         "title": "Configurar Intelbras AMT 2018 / 4010",
-        "description": "Configure a porta do servidor e a senha da central.\n\nA central AMT irá conectar neste servidor na porta configurada.",
+        "description": "Configure a porta TCP do Home Assistant e a senha de usuário. A central inicia a conexão com este servidor.\n\nA limpeza de disparos é opcional e usa outra credencial, configurada depois em Reconfigurar → Limpar disparo (beta).",
         "data": {
           "port": "Porta TCP",
-          "password": "Senha para comandos (4–6 dígitos)",
+          "password": "Senha de usuário (4–6 dígitos)",
           "update_interval": "Intervalo de atualização (segundos)",
           "status_password": "Senha para consulta de status (opcional)"
         },
         "data_description": {
           "port": "Porta onde o servidor irá escutar (padrão: 9009)",
-          "password": "Senha configurada na central para comandos remotos",
+          "password": "Senha de usuário da central, de 4 a 6 dígitos, para armar/desarmar e controlar sirene e PGMs. Aplica-se a todos os modelos suportados: AMT 2018 E/EG/E SMART, AMT 1000 Smart e AMT 4010.",
           "update_interval": "Intervalo de consulta do status (1–60 segundos, padrão: 2). O status também é atualizado a cada heartbeat da central.",
-          "status_password": "Na AMT 4010, use a senha do computador. Sem senha específica configurada, a consulta usa a senha dos comandos."
+          "status_password": "Normalmente deixe vazio nas AMT 2018 E/EG/E SMART e AMT 1000 Smart: a consulta usa a senha de usuário. Na AMT 4010, se a consulta exigir a senha do computador, informe-a aqui. Este campo serve apenas para ler o status e não habilita Limpar disparo."
         }
       },
       "reconfigure": {
-        "title": "Reconfigurar conexão da central",
-        "description": "Altere a porta e/ou as senhas. Campos de senha vazios mantêm a configuração atual. Ao mudar a porta, ajuste também o destino configurado na central.",
+        "title": "Reconfigurar Intelbras AMT",
+        "description": "Escolha a função da senha que deseja alterar. Salvar aqui muda apenas as credenciais usadas pela integração; não altera as senhas gravadas na central. Os campos nunca exibem as senhas salvas.",
+        "menu_options": {
+          "connection": "Conexão e senha de usuário",
+          "status_auth": "Consulta de status",
+          "programming": "Limpar disparo (beta) — senha do computador"
+        }
+      },
+      "connection": {
+        "title": "Conexão e senha de usuário",
+        "description": "A central conecta à porta TCP deste servidor. Ao mudar a porta, ajuste também o destino na central.\n\nSenha de usuário da central, de 4 a 6 dígitos, para armar/desarmar e controlar sirene e PGMs. Aplica-se a todos os modelos suportados: AMT 2018 E/EG/E SMART, AMT 1000 Smart e AMT 4010. Se ela também for usada nas consultas, uma leitura validará a alteração. Se houver senha de consulta separada, só o formato será verificado: não enviamos comandos de arme/desarme ao salvar.\n\nAtual: {current}.",
         "data": {
-          "port": "Porta TCP",
-          "password": "Senha para comandos (4–6 dígitos)",
-          "status_password": "Senha para consulta de status (opcional)"
+          "port": "Porta TCP do servidor",
+          "action": "Ação",
+          "password": "Nova senha de usuário (4–6 dígitos)"
         },
         "data_description": {
-          "password": "Vazio mantém a senha atual; a senha existente não é exibida.",
-          "status_password": "Na AMT 4010, use a senha do computador. Sem senha específica configurada, a consulta usa a senha dos comandos. Vazio mantém a configuração atual; a senha existente não é exibida."
+          "password": "Preencha apenas ao escolher Definir ou substituir senha. A senha salva nunca é exibida."
+        }
+      },
+      "status_auth": {
+        "title": "Consulta de status",
+        "description": "Normalmente deixe vazio nas AMT 2018 E/EG/E SMART e AMT 1000 Smart: a consulta usa a senha de usuário. Na AMT 4010, se a consulta exigir a senha do computador, informe-a aqui. Este campo serve apenas para ler o status e não habilita Limpar disparo.\n\nEscolha Definir ou substituir senha para informar uma credencial específica, ou Usar a senha de usuário nas consultas para removê-la. A leitura será validada antes de salvar; falhas preservam a configuração anterior.\n\nAtual: {current}.",
+        "data": {
+          "action": "Ação",
+          "status_password": "Nova senha para consulta de status (4–6 dígitos)"
+        },
+        "data_description": {
+          "status_password": "Preencha apenas ao escolher Definir ou substituir senha. A senha salva nunca é exibida."
+        }
+      },
+      "programming": {
+        "title": "Limpar disparo (beta)",
+        "description": "Recurso beta para AMT 2018 E/EG/E SMART, AMT 1000 Smart e AMT 4010, sujeito à compatibilidade do firmware.\n\nInforme a senha do computador de 6 dígitos usada no AMT Remoto Mobile por IP Local. Ela autentica a limpeza da memória de todas as zonas; não substitui a senha de usuário nem a senha das consultas. Na AMT 4010, mesmo que use essa senha em Consulta de status, informe-a também aqui para habilitar o botão.\n\nRequer acesso do HA ao IP local da central na porta TCP 9009. Ao salvar, fazemos apenas autenticação e leitura. O botão só limpa por ação manual, com todas as partições desarmadas e a sirene desligada.\n\nAtual: {current}.",
+        "data": {
+          "action": "Ação",
+          "computer_password": "Nova senha do computador (6 dígitos)"
+        },
+        "data_description": {
+          "computer_password": "Preencha apenas ao escolher Definir ou substituir senha. A senha salva nunca é exibida."
         }
       }
     },
@@ -35,7 +65,17 @@
       "invalid_port": "Porta inválida (1-65535)",
       "invalid_password": "Senha deve ter entre 4 e 6 dígitos",
       "invalid_update_interval": "Intervalo deve ser entre 1 e 60 segundos",
-      "port_in_use": "Outra entrada desta integração já utiliza esta porta."
+      "port_in_use": "Outra entrada desta integração já utiliza esta porta.",
+      "invalid_computer_password_format": "A senha do computador deve ter exatamente 6 dígitos.",
+      "password_required": "Informe a nova senha ou escolha Manter configuração atual.",
+      "invalid_action": "Escolha uma ação válida.",
+      "central_not_connected": "Não foi possível validar a alteração. Verifique a conexão da central; a configuração anterior foi preservada.",
+      "unsupported_programming_model": "A limpeza beta requer uma AMT 2018 E/EG/E SMART, AMT 1000 Smart ou AMT 4010 conectada e identificada.",
+      "invalid_computer_password": "A central rejeitou a senha do computador. A configuração anterior foi preservada.",
+      "cannot_connect_programming": "Não foi possível concluir a sessão local com a central na porta 9009. A configuração anterior foi preservada.",
+      "programming_failed": "A central não confirmou a sessão de programação. A configuração anterior foi preservada.",
+      "status_validation_failed": "A leitura não foi confirmada com essa credencial. A configuração anterior foi preservada.",
+      "choose_replace": "Para salvar a senha digitada, escolha Definir ou substituir senha. Para manter ou remover, deixe o campo vazio."
     },
     "abort": {
       "already_configured": "Esta porta já está configurada.",

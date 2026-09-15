@@ -65,7 +65,7 @@ class IntelbrasAMTAlarm(CoordinatorEntity[AMTCoordinator], AlarmControlPanelEnti
         self._siren_on_since: float | None = None
         self._siren_trigger_confirmed = False
         self._last_trigger_reason: str | None = None
-        self._last_ignored_triggered_raw: bytes | None = None
+        self._last_ignored_triggered_decision: tuple | None = None
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -131,7 +131,7 @@ class IntelbrasAMTAlarm(CoordinatorEntity[AMTCoordinator], AlarmControlPanelEnti
             return
 
         self._last_trigger_reason = reason
-        self._last_ignored_triggered_raw = None
+        self._last_ignored_triggered_decision = None
         status = self.coordinator.data
         if not status:
             return
@@ -153,14 +153,16 @@ class IntelbrasAMTAlarm(CoordinatorEntity[AMTCoordinator], AlarmControlPanelEnti
         """Loga quando o bit triggered é ignorado por não parecer disparo real."""
         status = self.coordinator.data
         if not status or not status.triggered:
-            self._last_ignored_triggered_raw = None
+            self._last_ignored_triggered_decision = None
             return
 
-        raw_data = status.raw_data
-        if raw_data == self._last_ignored_triggered_raw:
+        # Relógio e aberturas não mudam a decisão sobre memória de disparo.
+        decision = (status.armed, status.siren_on, status.partitions.partitions_enabled,
+                    tuple(sorted(status.zones.violated_zones)))
+        if decision == self._last_ignored_triggered_decision:
             return
 
-        self._last_ignored_triggered_raw = raw_data
+        self._last_ignored_triggered_decision = decision
         reason = (
             "particionamento ativo sem zona violada"
             if status.armed
@@ -178,7 +180,7 @@ class IntelbrasAMTAlarm(CoordinatorEntity[AMTCoordinator], AlarmControlPanelEnti
             sorted(status.zones.open_zones),
             sorted(status.zones.violated_zones),
             status.partitions,
-            raw_data.hex(" "),
+            status.raw_data.hex(" "),
         )
 
     @staticmethod
@@ -219,7 +221,7 @@ class IntelbrasAMTAlarm(CoordinatorEntity[AMTCoordinator], AlarmControlPanelEnti
         if status.triggered:
             self._log_ignored_triggered()
         else:
-            self._last_ignored_triggered_raw = None
+            self._last_ignored_triggered_decision = None
         
         # Verifica se está armada
         if status.armed:

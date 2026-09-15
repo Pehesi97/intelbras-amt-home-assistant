@@ -119,3 +119,23 @@ def test_siren_bips_and_sustained_fallback_are_preserved(alarm, alarm_module, mo
     status.siren_on = False
     alarm._update_siren_trigger_fallback()
     assert alarm.alarm_state == "disarmed"
+
+
+def test_ignored_memory_log_ignores_clock_and_openings(alarm, caplog):
+    status = alarm.coordinator.data
+    status.armed = False
+    status.zones.violated_zones = {26}
+    assert alarm.alarm_state == "disarmed"
+    count = len(caplog.records)
+    status.raw_data = bytes([1]) * len(status.raw_data)
+    status.zones.open_zones = {25}
+    assert alarm.alarm_state == "disarmed"
+    assert len(caplog.records) == count
+    status.zones.violated_zones.add(27)
+    assert alarm.alarm_state == "disarmed"
+    assert len(caplog.records) == count + 1
+    status.triggered = False
+    assert alarm.alarm_state == "disarmed"
+    status.triggered = True
+    assert alarm.alarm_state == "disarmed"
+    assert len(caplog.records) == count + 2

@@ -6,6 +6,7 @@ DOMAIN = "intelbras_amt"
 CONF_PORT = "port"
 CONF_PASSWORD = "password"
 CONF_STATUS_PASSWORD = "status_password"
+CONF_COMPUTER_PASSWORD = "computer_password"
 CONF_UPDATE_INTERVAL = "update_interval"
 
 # Defaults

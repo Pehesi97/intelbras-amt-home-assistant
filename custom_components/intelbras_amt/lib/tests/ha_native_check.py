@@ -20,11 +20,13 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 import custom_components.intelbras_amt as integration
 from custom_components.intelbras_amt.lib.protocol.isecnet import ISECNetFrame
 from custom_components.intelbras_amt.binary_sensor import AMTZoneBinarySensor, AMTZoneProblemBinarySensor
+from custom_components.intelbras_amt.button import AMTClearAlarmButton
 from custom_components.intelbras_amt.config_flow import IntelbrasAMTConfigFlow, IntelbrasAMTOptionsFlow
 from custom_components.intelbras_amt.coordinator import AMTCoordinator
 from custom_components.intelbras_amt.diagnostics import async_get_config_entry_diagnostics
 from custom_components.intelbras_amt.entity_selection import async_apply_entity_selection
 from custom_components.intelbras_amt.lib.protocol.commands import PartialCentralStatus
+from custom_components.intelbras_amt.lib.protocol.responses import Response
 from custom_components.intelbras_amt.sensor import AMTDateTimeSensor, AMTLastArmEventSensor
 
 
@@ -74,16 +76,42 @@ async def main():
         assert opening.available and problem.available
         assert coordinator.successful_polls == 1
 
+        # Native button and coordinator; only the wire responses are synthetic.
+        clear_coordinator = AMTCoordinator(hass, AsyncMock(), "synthetic-clear", "123456", main_entry.entry_id)
+        clear_coordinator._detected_model = 0x1E
+        memory_raw = bytearray(43)
+        memory_raw[18], memory_raw[22], memory_raw[9] = 0x1E, 0x44, 2
+        memory = PartialCentralStatus.parse(memory_raw)
+        memory_raw[22] = memory_raw[9] = 0
+        cleared = PartialCentralStatus.parse(memory_raw)
+        clear_coordinator.async_set_updated_data(memory)
+        clear_button = AMTClearAlarmButton(clear_coordinator, main_entry)
+        assert not clear_button.available  # Existing entries require explicit opt-in.
+        hass.config_entries.async_update_entry(main_entry, data={**main_entry.data, "computer_password":"102030"})
+        assert clear_button.available and clear_button.name == "Limpar disparo (beta)"
+        memory.armed = True
+        assert not clear_button.available
+        memory.armed = False
+        clear_coordinator._fetch_partial_status = AsyncMock(side_effect=[memory, cleared])
+        clear_coordinator.programming_host = lambda: "192.0.2.55"
+        with patch("custom_components.intelbras_amt.button.ProgrammingSession") as factory:
+            session = AsyncMock()
+            factory.return_value.__aenter__.return_value = session
+            await clear_button.async_press()
+            session.clear_alarm_memory.assert_awaited_once()
+        assert not clear_coordinator.data.zones.violated_zones
+        await clear_coordinator.async_shutdown()
+
         # Reconfiguration preserves entry identity and password; checks duplicates.
         flow = IntelbrasAMTConfigFlow()
         flow.hass = hass
         flow.context = {"source": "reconfigure", "entry_id": main_entry.entry_id}
         result = await flow.async_step_reconfigure()
         assert "123456" not in repr(result)
-        assert (await flow.async_step_reconfigure({"port": 9010}))["errors"] == {"port": "port_in_use"}
-        assert (await flow.async_step_reconfigure({"port": 9009, "password": "12ab"}))["errors"]["password"] == "invalid_password"
+        assert (await flow.async_step_connection({"port": 9010, "action":"keep"}))["errors"] == {"port": "port_in_use"}
+        assert (await flow.async_step_connection({"port": 9009, "action":"replace", "password": "12ab"}))["errors"]["password"] == "invalid_password"
         with patch.object(hass.config_entries, "async_reload", AsyncMock(return_value=True)) as reload:
-            result = await flow.async_step_reconfigure({"port": 9011, "password": ""})
+            result = await flow.async_step_connection({"port": 9011, "action":"keep"})
             await hass.async_block_till_done()
             assert result["type"] == "abort"
             assert main_entry.data["password"] == "123456"
@@ -103,13 +131,54 @@ async def main():
             result = await initial.async_step_user({"port": 9020, "password": "123456", **optional})
             assert result["type"] == "create_entry"
         with patch.object(hass.config_entries, "async_reload", AsyncMock(return_value=True)):
-            await flow.async_step_reconfigure({"port": 9011, "status_password": "654321"})
+            await flow.async_step_status_auth({"action":"replace", "status_password": "654321"})
             await hass.async_block_till_done()
-            await flow.async_step_reconfigure({"port": 9011, "password": "", "status_password": ""})
+            await flow.async_step_status_auth({"action":"keep", "status_password": ""})
             await hass.async_block_till_done()
         assert main_entry.data["password"] == "123456" and main_entry.data["status_password"] == "654321"
         result = await flow.async_step_reconfigure()
         assert all(secret not in repr(result) for secret in ("123456", "654321"))
+
+        # Rejected status credentials never modify the saved entry or running poller.
+        saved_data = dict(main_entry.data)
+        with patch.object(coordinator, "async_validate_status_password", AsyncMock(side_effect=UpdateFailed("Rejected"))):
+            result = await flow.async_step_status_auth({"action":"replace", "status_password":"111111"})
+            assert result["errors"]["base"] == "status_validation_failed"
+            assert dict(main_entry.data) == saved_data and coordinator.password == "123456"
+        assert (await flow.async_step_status_auth({"action":"replace", "status_password":""}))["errors"]
+        assert (await flow.async_step_status_auth({"action":"keep", "status_password":"111111"}))["errors"]["status_password"] == "choose_replace"
+        # Computer-password validation authenticates and reads only, then exits before save.
+        coordinator.programming_host = lambda: "192.0.2.55"
+        with patch("custom_components.intelbras_amt.config_flow.ProgrammingSession") as factory, patch.object(
+            hass.config_entries, "async_reload", AsyncMock(return_value=True),
+        ):
+            session = AsyncMock()
+            factory.return_value.__aenter__.return_value = session
+            for model in (0x1E, 0x34, 0x36, 0x41):
+                coordinator._detected_model = model
+                session.reset_mock()
+                result = await flow.async_step_programming({"action":"replace", "computer_password":"102030"})
+                assert result["type"] == "abort"
+                session.read_status.assert_awaited_once()
+                session.clear_alarm_memory.assert_not_awaited()
+                assert factory.return_value.__aexit__.called
+                await hass.async_block_till_done()
+            coordinator._detected_model = 0xFF
+            session.reset_mock()
+            result = await flow.async_step_programming({"action":"replace", "computer_password":"102030"})
+            assert result["errors"]["base"] == "unsupported_programming_model"
+            session.read_status.assert_not_awaited()
+            coordinator._detected_model = 0x1E
+            factory.return_value.__aenter__.side_effect = PermissionError()
+            result = await flow.async_step_programming({"action":"replace", "computer_password":"111111"})
+            assert result["errors"]["computer_password"] == "invalid_computer_password"
+            assert main_entry.data["computer_password"] == "102030"
+            result = await flow.async_step_programming({"action":"remove"})
+            assert result["type"] == "abort" and "computer_password" not in main_entry.data
+            await hass.async_block_till_done()
+        for step in (flow.async_step_connection, flow.async_step_status_auth, flow.async_step_programming):
+            form = await step()
+            assert all(secret not in repr(form) for secret in ("123456", "654321", "102030"))
 
         # Options validate choices, normalize strings, allow empty selections.
         options = IntelbrasAMTOptionsFlow()
@@ -217,6 +286,16 @@ async def main():
         serialized = json.dumps(diagnostics)
         assert all(secret not in serialized for secret in ("123456", "654321", "192.0.2.55", main_entry.entry_id, "raw_data"))
         assert diagnostics["successful_polls"] == 1 and diagnostics["last_successful_poll"]
+        # Explicit action removes only the status override.
+        saved_options = dict(main_entry.options)
+        with patch.object(hass.config_entries, "async_reload", AsyncMock(return_value=True)):
+            result = await flow.async_step_status_auth({"action":"remove"})
+            await hass.async_block_till_done()
+        assert result["type"] == "abort"
+        assert "status_password" not in main_entry.data
+        assert "use_command_password_for_status" not in main_entry.data
+        assert main_entry.data["password"] == "123456"
+        assert main_entry.options == saved_options
         await coordinator.async_shutdown()
 
         # Existing entries keep using their command password for polling.
