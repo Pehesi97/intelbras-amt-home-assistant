@@ -35,6 +35,7 @@ async def async_setup_entry(
         AMTZonesBypassedSensor(coordinator, entry),
         AMTSirenStatusSensor(coordinator, entry),
         AMTArmedStatusSensor(coordinator, entry),
+        AMTLastArmEventSensor(coordinator, entry),
     ]
     
     async_add_entities(entities)
@@ -113,6 +114,8 @@ class AMTFirmwareSensor(AMTBaseSensor):
 
 class AMTDateTimeSensor(AMTBaseSensor):
     """Sensor para data/hora da central."""
+
+    _attr_entity_registry_enabled_default = False
     
     def __init__(self, coordinator: AMTCoordinator, entry: ConfigEntry) -> None:
         """Inicializa o sensor de data/hora."""
@@ -138,6 +141,33 @@ class AMTDateTimeSensor(AMTBaseSensor):
         # A central reporta horário local sem timezone
         # Assumimos que é o timezone do Home Assistant
         return central_dt.replace(tzinfo=dt_util.get_default_time_zone())
+
+
+class AMTLastArmEventSensor(AMTBaseSensor):
+    """Último evento recebido."""
+
+    def __init__(self, coordinator: AMTCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry, "ultimo_arme_desarme", "Último arme/desarme")
+        self._attr_icon = "mdi:account-lock"
+
+    @property
+    def native_value(self) -> str | None:
+        event = self.coordinator.last_arm_event
+        return event.action if event else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        event = self.coordinator.last_arm_event
+        if event is None:
+            return {}
+        occurred_at = event.occurred_at
+        return {
+            "usuario_numero": event.user_number,
+            "particao": event.partition,
+            "codigo_evento": event.code,
+            "data_hora_evento": occurred_at.replace(tzinfo=dt_util.get_default_time_zone()).isoformat() if occurred_at else None,
+            "recebido_em": self.coordinator.last_arm_event_received_at.isoformat(),
+        }
 
 
 class AMTZonesOpenSensor(AMTBaseSensor):
@@ -273,6 +303,5 @@ class AMTArmedStatusSensor(AMTBaseSensor):
             "particao_c": "Armada" if partitions.partition_c_armed else "Desarmada",
             "particao_d": "Armada" if partitions.partition_d_armed else "Desarmada",
         }
-
 
 

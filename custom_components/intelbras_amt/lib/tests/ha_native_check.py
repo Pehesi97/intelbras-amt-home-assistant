@@ -25,6 +25,7 @@ from custom_components.intelbras_amt.coordinator import AMTCoordinator
 from custom_components.intelbras_amt.diagnostics import async_get_config_entry_diagnostics
 from custom_components.intelbras_amt.entity_selection import async_apply_entity_selection
 from custom_components.intelbras_amt.lib.protocol.commands import PartialCentralStatus
+from custom_components.intelbras_amt.sensor import AMTDateTimeSensor, AMTLastArmEventSensor
 
 
 def entry(port=9009):
@@ -47,6 +48,8 @@ async def main():
             await hass.config_entries.async_add(other_entry)
         coordinator = AMTCoordinator(hass, AsyncMock(), "synthetic", "123456", main_entry.entry_id)
         coordinator._detected_model = 0x1E
+        assert coordinator.update_interval.total_seconds() == 2
+        assert not AMTDateTimeSensor(coordinator, main_entry).entity_registry_enabled_default
         hass.data["intelbras_amt"] = {main_entry.entry_id: {"coordinator": coordinator}}
 
         # Real CoordinatorEntity availability, disconnected polling, and recovery.
@@ -91,6 +94,8 @@ async def main():
         initial = IntelbrasAMTConfigFlow()
         initial.hass = hass
         initial.context = {"source": "user"}
+        form = await initial.async_step_user()
+        assert form["data_schema"]({"password": "123456"})["update_interval"] == 2
         for invalid in ("12ab", "１２３４", "123", "1234567", None):
             values = {"port": 9020, "password": "123456", "status_password": invalid}
             assert (await initial.async_step_user(values))["errors"]["status_password"] == "invalid_password"
@@ -173,6 +178,30 @@ async def main():
         assert live.connection_id == "second" and runtime["connected"]
         await live.async_refresh()
         assert probe.available
+        # Real frame callback routes only the active central and keeps status intact.
+        sensor = AMTLastArmEventSensor(live, main_entry)
+        assert sensor.native_value is None and sensor.extra_state_attributes == {}
+        payload = bytes.fromhex("11 01 02 03 04 01 08 03 04 0a 01 0a 02 0a 0a 07")
+        calendar = bytes.fromhex("0f 06 11 0c 03 18 0f 06 11 0c 03 18")
+        frame = ISECNetFrame(0xB4, payload + calendar)
+        await server._frame_callbacks[0](SimpleNamespace(id="first"), frame)
+        assert sensor.native_value is None
+        await server._frame_callbacks[0](SimpleNamespace(id="second"), frame)
+        assert sensor.native_value == "Armado"
+        attrs = sensor.extra_state_attributes
+        assert attrs["usuario_numero"] == 7
+        assert attrs["particao"] == 2 and attrs["codigo_evento"] == 401
+        assert attrs["data_hora_evento"].startswith("2017-06-15T12:03:24")
+        assert live.data is status
+        live.async_handle_event(frame)  # Duplicate must not change receipt timestamp.
+        assert sensor.extra_state_attributes == attrs
+        older = ISECNetFrame(0xB4, payload + b"\x0e" + calendar[1:])
+        live.async_handle_event(older)
+        assert sensor.extra_state_attributes == attrs
+        live.async_handle_event(ISECNetFrame(0xB0, payload[:7] + b"\x01" + payload[8:]))
+        assert sensor.native_value == "Desarmado" and sensor.extra_state_attributes["data_hora_evento"] is None
+        live.async_handle_event(ISECNetFrame(0xB0, payload[:8] + b"\x04\x0a\x03" + payload[11:]))
+        assert sensor.extra_state_attributes["usuario_numero"] is None
         await server._disconnect_callbacks[0](SimpleNamespace(id="second"))
         assert not probe.available
         await server._frame_callbacks[0](SimpleNamespace(id="first"), ISECNetFrame.create_mobile_frame(bytes(43)))
@@ -197,9 +226,10 @@ async def main():
             assert await integration.async_setup_entry(hass, other_entry)
         legacy = hass.data["intelbras_amt"][other_entry.entry_id]
         assert legacy["coordinator"].password == legacy["password"] == "123456"
+        assert legacy["coordinator"].update_interval.total_seconds() == 2
         await legacy["coordinator"].async_shutdown()
         await hass.async_stop(force=True)
-        print("HA native checks passed: availability, reconfiguration, selection, diagnostics")
+        print("HA native checks passed: availability, reconfiguration, selection, diagnostics, defaults, arm events")
 
 
 if __name__ == "__main__":

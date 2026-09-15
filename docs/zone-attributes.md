@@ -2,7 +2,7 @@
 
 Cada zona possui duas entidades: `Zona NN` para abertura e `Zona NN - Problema`
 para falhas. As duas expõem os cinco atributos descritos abaixo. O sensor de
-abertura existente mantém seu ID e os atributos introduzidos nas betas anteriores.
+abertura existente mantém seu ID e seus atributos.
 Seu estado continua representando apenas o bit de abertura recebido da central;
 memória de disparo e bateria baixa não transformam esse estado em aberto.
 
@@ -25,9 +25,7 @@ curto_circuito: null
 - `null`: dado ausente ou não representado para essa zona no status recebido.
 - `false`: o status não indica o alerta; não comprova sensor cadastrado ou bateria saudável.
 
-Como o usuário relatou sensores que transmitem somente abertura, o bit de abertura
-zerado não comprova fechamento físico. Esses atributos não acrescentam informações
-que a central não transmitiu.
+Em sensores que transmitem somente abertura, o bit zerado não comprova fechamento físico.
 
 ## Entidade de problema
 
@@ -49,7 +47,7 @@ observar `to: "on"` na entidade de problema; use os atributos para identificar a
 ## Onde visualizar
 
 Abra **Ferramentas do desenvolvedor → Estados** e procure a entidade principal.
-Nesta instalação: `binary_sensor.intelbras_amt_2018_4010_zona_25_aberta`.
+Exemplo: `binary_sensor.intelbras_amt_2018_4010_zona_25_aberta`.
 Os cinco campos ficam nos atributos do estado. A tela de entidades/dispositivo
 não cria linhas para cada atributo. No dashboard, use o cartão nativo
 [Entities com linhas de atributo](https://www.home-assistant.io/dashboards/entities/#attribute).
@@ -91,17 +89,8 @@ agora usam a leitura corrigida. Isso corrige a zona associada ao alerta
 sem alterar IDs. Integrações que compensavam manualmente esse deslocamento
 precisam remover a compensação. O status completo permanece com zonas 1–8.
 
-## Conteúdo e validação
+## Compatibilidade
 
-A versão 1.0.0 inclui também o reconhecimento AMT1000, as correções de transporte
-e a mitigação de partições da #10. Os limites desta última, incluindo memória
-antiga e pânico silencioso sem zona, estão em [protocol-review.md](protocol-review.md).
-
-Os testes verificam os atributos, os limites dos formatos de status, a preservação
-do ID principal e a remoção seletiva e idempotente das auxiliares. Os testes
-unitários usam substitutos das dependências do HA; a atualização é verificada
-separadamente no HA real, conforme [o changelog](../CHANGELOG.md).
-
-A versão de manutenção **0.7.4** contém apenas os fixes das issues 9/10/11,
-preservando a estrutura anterior de entidades. As mudanças descritas neste
-documento pertencem exclusivamente à **1.0.0**. Consulte [o changelog](../CHANGELOG.md).
+Estas mudanças pertencem à versão **1.0.0**. A versão **0.7.4** mantém a estrutura
+anterior de entidades. Consulte o [changelog](../CHANGELOG.md) e os
+[limites conhecidos](protocol-review.md).

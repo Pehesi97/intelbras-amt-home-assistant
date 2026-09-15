@@ -16,6 +16,7 @@ from .lib.protocol.commands import (
     CentralStatus,
 )
 from .lib.protocol.responses import ResponseType
+from .lib.protocol.events import ArmEvent
 from .lib.const import CentralModel
 from .const import DEFAULT_UPDATE_INTERVAL
 
@@ -66,7 +67,7 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
             connection_id: ID da conexão ativa.
             password: Senha para consulta de status (independente dos comandos).
             entry_id: ID da config entry.
-            update_interval: Intervalo de polling em segundos (padrão: 5s).
+            update_interval: Intervalo de polling em segundos (padrão: 2s).
         """
         super().__init__(
             hass,
@@ -85,8 +86,25 @@ class AMTCoordinator(DataUpdateCoordinator[PartialCentralStatus | CentralStatus 
         self.successful_polls = 0
         self.failed_polls = 0
         self.last_error_type: str | None = None
+        self.last_arm_event: ArmEvent | None = None
+        self.last_arm_event_received_at: datetime | None = None
         self._last_heartbeat_refresh: float = 0.0
         """Timestamp do último refresh disparado por heartbeat (monotonic)."""
+
+    def async_handle_event(self, frame) -> None:
+        """Atualiza o histórico de arme sem tratar evento como status válido."""
+        event = ArmEvent.from_frame(frame)
+        if event is None:
+            return
+        previous = self.last_arm_event
+        if (previous and previous.occurred_at and event.occurred_at
+                and event.occurred_at < previous.occurred_at):
+            return
+        if event.occurred_at and event == previous:
+            return
+        self.last_arm_event = event
+        self.last_arm_event_received_at = datetime.now(timezone.utc)
+        # O próximo status publica o sensor sem simular uma nova amostra da sirene.
 
     async def async_heartbeat_refresh(self) -> None:
         """Agenda um refresh de status ao receber heartbeat.

@@ -13,7 +13,7 @@
         "data_description": {
           "port": "Porta onde o servidor irá escutar (padrão: 9009)",
           "password": "Senha configurada na central para comandos remotos",
-          "update_interval": "Intervalo base de polling do status (1-60 segundos, padrão: 2). O status também é atualizado automaticamente a cada heartbeat da central.",
+          "update_interval": "Intervalo de consulta do status (1–60 segundos, padrão: 2). O status também é atualizado a cada heartbeat da central.",
           "status_password": "Na AMT 4010, use a senha do computador. Sem senha específica configurada, a consulta usa a senha dos comandos."
         }
       },

@@ -149,6 +149,7 @@ if _HAS_HOMEASSISTANT:
                 return
 
             _LOGGER.debug(f"Frame recebido de {conn.id}: {frame}")
+            coordinator.async_handle_event(frame)
             
             # Dispara evento no HA para que entidades possam reagir
             hass.bus.async_fire(f"{DOMAIN}_frame_received", {

@@ -120,12 +120,16 @@ particionadas. Veja os [testes e limites da mitigação](docs/protocol-review.md
 #### Sensors
 - **Modelo** - Modelo da central (hex)
 - **Firmware** - Versão do firmware
-- **Data/Hora** - Data e hora da central
+- **Data/Hora** - Data e hora da central; desativado por padrão em novas instalações
 - **Zonas Abertas** - Contagem e lista de zonas abertas
 - **Zonas Violadas** - Lista de zonas violadas (ex: "26" ou "26, 30")
 - **Zonas em Bypass** - Contagem e lista de zonas em bypass
 - **Sirene** - Status da sirene (Ligada/Desligada)
 - **Armada** - Status de armamento geral
+- **Último arme/desarme** - Última ação recebida, com número do usuário, partição
+  e horário nos atributos. Requer envio de eventos pela central; quando o evento
+  não identifica um usuário, o número fica vazio. Reiniciar ou recarregar a
+  integração limpa essa informação.
 
 #### Binary Sensors
 - **Zona NN** - Sensor principal de abertura por zona (48 na AMT2018; 64 na AMT4010),
@@ -155,7 +159,8 @@ particionadas. Veja os [testes e limites da mitigação](docs/protocol-review.md
 A versão 1.0 permite alterar porta/senhas em **Reconfigurar**, escolher zonas/PGMs e
 intervalo em **Opções**, e **Baixar diagnóstico** na página da integração.
 Sem conexão, as entidades ficam indisponíveis até receber novo status válido.
-Veja [os detalhes e a preservação dos IDs](docs/beta-options.md).
+O intervalo padrão é de **2 segundos**; configurações existentes são mantidas.
+Veja [como configurar](docs/beta-options.md).
 
 ## Atualização da 0.x para a 1.0
 
@@ -474,11 +479,8 @@ O servidor interativo aceita os seguintes comandos:
 # Todos os testes
 uv run pytest -v
 
-# Apenas testes de checksum
-uv run pytest -v custom_components/intelbras_amt/lib/tests/test_checksum.py
-
-# Apenas testes de protocolo
-uv run pytest -v custom_components/intelbras_amt/lib/tests/test_isecnet.py
+# Apenas testes de transporte
+uv run pytest -v custom_components/intelbras_amt/lib/tests/test_transport.py
 ```
 
 ## Troubleshooting
@@ -515,7 +517,7 @@ uv run pytest -v custom_components/intelbras_amt/lib/tests/test_isecnet.py
 
 ### Status não atualiza
 
-1. O coordinator atualiza o status periodicamente (padrão: a cada 30 segundos)
+1. O coordinator atualiza o status periodicamente (padrão: a cada 2 segundos)
 
 2. Você pode forçar uma atualização manualmente através do serviço `homeassistant.update_entity`
 
