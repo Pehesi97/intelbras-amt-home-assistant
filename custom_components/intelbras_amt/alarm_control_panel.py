@@ -225,16 +225,16 @@ class IntelbrasAMTAlarm(CoordinatorEntity[AMTCoordinator], AlarmControlPanelEnti
         
         # Verifica se está armada
         if status.armed:
-            # Verifica se é stay mode (home) ou away
-            if status.partitions.partitions_enabled:
-                # Se partições estão habilitadas, verifica se alguma está em stay mode
-                # Por enquanto, assumimos que se todas estão armadas, é away
-                return AlarmControlPanelState.ARMED_AWAY
-            else:
-                # Sem partições, verifica se é stay mode
-                # Por enquanto, assumimos away se armada
-                return AlarmControlPanelState.ARMED_AWAY
-        
+            # O arme "stay"/em casa da AMT anula automaticamente as zonas
+            # internas (de passagem) para a pessoa circular dentro de casa,
+            # enquanto o arme "ausente" mantém todas as zonas ativas. A central
+            # reporta essas zonas auto-anuladas como "anuladas" (bypass) no frame
+            # de status, então um conjunto de bypass não-vazio com a central
+            # armada indica modo stay/em casa.
+            if status.zones.bypassed_zones:
+                return AlarmControlPanelState.ARMED_HOME
+            return AlarmControlPanelState.ARMED_AWAY
+
         return AlarmControlPanelState.DISARMED
 
     @property
