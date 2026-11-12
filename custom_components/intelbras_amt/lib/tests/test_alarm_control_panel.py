@@ -28,7 +28,8 @@ def alarm_module(monkeypatch):
             "AlarmControlPanelEntity": type("AlarmControlPanelEntity", (), {}),
             "AlarmControlPanelEntityFeature": SimpleNamespace(ARM_HOME=1, ARM_AWAY=2),
             "AlarmControlPanelState": type("AlarmControlPanelState", (), {
-                "TRIGGERED": "triggered", "ARMED_AWAY": "armed_away", "DISARMED": "disarmed",
+                "TRIGGERED": "triggered", "ARMED_AWAY": "armed_away",
+                "ARMED_HOME": "armed_home", "DISARMED": "disarmed",
             }),
             "CodeFormat": SimpleNamespace(NUMBER="number"),
         },
@@ -73,6 +74,20 @@ def test_partitioned_global_flag_without_violation_stays_armed(alarm, caplog):
     assert alarm.alarm_state == "armed_away"
     assert "sem zona violada" in caplog.text
     assert "central desarmada" not in caplog.text
+
+
+def test_armed_with_bypassed_zones_reports_home(alarm):
+    # Stay/home arming auto-bypasses the interior zones; the central reports
+    # them as "anuladas" (bypass). A non-empty bypass set while armed => home.
+    status = alarm.coordinator.data
+    status.armed = True
+    status.triggered = False
+    status.zones.violated_zones = set()
+    status.zones.bypassed_zones = {2, 4}
+    assert alarm.alarm_state == "armed_home"
+    # No bypassed zone (away arming keeps every zone active) => away.
+    status.zones.bypassed_zones = set()
+    assert alarm.alarm_state == "armed_away"
 
 
 def test_silent_zone_alarm_survives_open_flag_clearing_then_disarms(alarm):
